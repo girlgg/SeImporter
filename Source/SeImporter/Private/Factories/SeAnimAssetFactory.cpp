@@ -115,9 +115,9 @@ UObject* USeAnimAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPare
 					BonePosAnimFrame.Value[1] *= -1;
 					auto TimeInSeconds = static_cast<float>(BonePosAnimFrame.Frame) / Anim->Header.FrameRate;
 
-					boneFrameVector.Y = BonePosAnimFrame.Value[0];
-					boneFrameVector.Z = BonePosAnimFrame.Value[1];
-					boneFrameVector.X = BonePosAnimFrame.Value[2];
+					boneFrameVector.X = BonePosAnimFrame.Value[0];
+					boneFrameVector.Y = BonePosAnimFrame.Value[1];
+					boneFrameVector.Z = BonePosAnimFrame.Value[2];
 
 					PositionKeysX.Add(FRichCurveKey(TimeInSeconds, boneFrameVector.X));
 					PositionKeysY.Add(FRichCurveKey(TimeInSeconds, boneFrameVector.Y));
@@ -134,18 +134,6 @@ UObject* USeAnimAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPare
 					AnimSequence->GetController().SetCurveKeys(TransformCurveId, PosCurveKeys[i], bShouldTransact);
 				}
 			}
-			auto KeepRotationFrame = [](const float& LastFrame, float& ThisFrame)
-			{
-				const float DeltaFrame = ThisFrame - LastFrame;
-				if (DeltaFrame > 180)
-				{
-					ThisFrame -= 360.f;
-				}
-				else if (DeltaFrame < -180)
-				{
-					ThisFrame += 360.f;
-				}
-			};
 			if (KeyFrameBone.BoneRotations.Num() > 0)
 			{
 				TArray<TArray<FRichCurveKey>> RotCurveKeys;
@@ -153,7 +141,6 @@ UObject* USeAnimAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPare
 				TArray<FRichCurveKey> RotationKeysY;
 				TArray<FRichCurveKey> RotationKeysX;
 
-				FRotator3f LastBoneRotationKeyFrame;
 				for (size_t i = 0; i < KeyFrameBone.BoneRotations.Num(); i++)
 				{
 					auto BoneRotationKeyFrame = KeyFrameBone.BoneRotations[i];
@@ -161,14 +148,6 @@ UObject* USeAnimAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPare
 					FRotator3f LocalRotator = BoneRotationKeyFrame.Value.Rotator();
 					LocalRotator.Yaw *= -1.0f;
 					LocalRotator.Roll *= -1.0f;
-
-					if (i > 0)
-					{
-						KeepRotationFrame(LastBoneRotationKeyFrame.Pitch, LocalRotator.Pitch);
-						KeepRotationFrame(LastBoneRotationKeyFrame.Yaw, LocalRotator.Yaw);
-						KeepRotationFrame(LastBoneRotationKeyFrame.Roll, LocalRotator.Roll);
-					}
-					LastBoneRotationKeyFrame = LocalRotator;
 
 					auto TimeInSeconds = static_cast<float>(BoneRotationKeyFrame.Frame) / Anim->Header.FrameRate;
 					RotationKeysX.Add(FRichCurveKey(TimeInSeconds, LocalRotator.Pitch));
