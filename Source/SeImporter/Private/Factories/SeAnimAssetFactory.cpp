@@ -91,79 +91,158 @@ UObject* USeAnimAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPare
 		for (int32 BoneIndex = 0; BoneIndex < Anim->BonesInfos.Num(); BoneIndex++)
 		{
 			const FBoneInfo& KeyFrameBone = Anim->BonesInfos[BoneIndex];
-			auto BoneMesh = GetBone(KeyFrameBone.Name);
+			FMeshBoneInfo BoneMesh = GetBone(KeyFrameBone.Name);
 			if (BoneMesh.Name == "None") { continue; }
-			// Add Bone Transform curve, and add base pose transform to start
-			FSmartName NewCurveName;
-			NewCurveName.DisplayName = FName(KeyFrameBone.Name);
+			FName NewCurveName(KeyFrameBone.Name);
 
-			FAnimationCurveIdentifier TransformCurveId(NewCurveName, ERawCurveTrackTypes::RCT_Transform);
-			AnimSequence->GetController().AddCurve(TransformCurveId, AACF_DriveTrack | AACF_Editable);
-
-			// Loop thru actual bone positions
-			if (KeyFrameBone.BonePositions.Num() > 0)
+			if (KeyFrameBone.Name == TEXT("j_mainroot"))
 			{
-				TArray<TArray<FRichCurveKey>> PosCurveKeys;
-				TArray<FRichCurveKey> PositionKeysZ;
-				TArray<FRichCurveKey> PositionKeysY;
-				TArray<FRichCurveKey> PositionKeysX;
-
-				for (size_t i = 0; i < KeyFrameBone.BonePositions.Num(); i++)
-				{
-					FVector boneFrameVector;
-					auto BonePosAnimFrame = KeyFrameBone.BonePositions[i];
-					BonePosAnimFrame.Value[1] *= -1;
-					auto TimeInSeconds = static_cast<float>(BonePosAnimFrame.Frame) / Anim->Header.FrameRate;
-
-					boneFrameVector.X = BonePosAnimFrame.Value[0];
-					boneFrameVector.Y = BonePosAnimFrame.Value[1];
-					boneFrameVector.Z = BonePosAnimFrame.Value[2];
-
-					PositionKeysX.Add(FRichCurveKey(TimeInSeconds, boneFrameVector.X));
-					PositionKeysY.Add(FRichCurveKey(TimeInSeconds, boneFrameVector.Y));
-					PositionKeysZ.Add(FRichCurveKey(TimeInSeconds, boneFrameVector.Z));
-				}
-				PosCurveKeys.Add(PositionKeysX);
-				PosCurveKeys.Add(PositionKeysY);
-				PosCurveKeys.Add(PositionKeysZ);
-				for (int i = 0; i < 3; ++i)
-				{
-					const EVectorCurveChannel Axis = static_cast<EVectorCurveChannel>(i);
-					UAnimationCurveIdentifierExtensions::GetTransformChildCurveIdentifier(
-						TransformCurveId, ETransformCurveChannel::Position, Axis);
-					AnimSequence->GetController().SetCurveKeys(TransformCurveId, PosCurveKeys[i], bShouldTransact);
-				}
+				UE_LOG(LogTemp, Display, TEXT("j_mainroot"));
 			}
+
 			if (KeyFrameBone.BoneRotations.Num() > 0)
 			{
-				TArray<TArray<FRichCurveKey>> RotCurveKeys;
-				TArray<FRichCurveKey> RotationKeysZ;
-				TArray<FRichCurveKey> RotationKeysY;
-				TArray<FRichCurveKey> RotationKeysX;
+				TArray<FVector3f> PositionalKeys;
+				TArray<FQuat4f> RotationalKeys;
+				TArray<FVector3f> ScalingKeys;
 
-				for (size_t i = 0; i < KeyFrameBone.BoneRotations.Num(); i++)
+				// 设置位置关键帧
+				uint32 CurrentFrame = 0;
+				for (int32 i = 0; i < KeyFrameBone.BonePositions.Num(); ++i, ++CurrentFrame)
 				{
-					auto BoneRotationKeyFrame = KeyFrameBone.BoneRotations[i];
+					TWraithAnimFrame<FVector3f> BonePosAnimFrame = KeyFrameBone.BonePositions[i];
+					BonePosAnimFrame.Value[1] *= -1;
+					// 手动插值
+					if (i == 0 && BonePosAnimFrame.Frame > 0)
+					{
+						while (CurrentFrame < BonePosAnimFrame.Frame)
+						{
+							PositionalKeys.Add(BonePosAnimFrame.Value);
+							++CurrentFrame;
+						}
+					}
+					else
+					{
+						while (CurrentFrame < BonePosAnimFrame.Frame)
+						{
+							TWraithAnimFrame<FVector3f> LastBonePosAnimFrame = KeyFrameBone.BonePositions[i - 1];
+							PositionalKeys.Add(
+								FMath::Lerp(LastBonePosAnimFrame.Value, BonePosAnimFrame.Value,
+								            static_cast<float>(CurrentFrame - LastBonePosAnimFrame.Frame) /
+								            static_cast<float>(BonePosAnimFrame.Frame - LastBonePosAnimFrame.Frame)));
+							++CurrentFrame;
+						}
+					}
+					PositionalKeys.Add(BonePosAnimFrame.Value);
+				}
+
+				// 设置旋转关键帧
+				FQuat4f LastRotator;
+				CurrentFrame = 0;
+				for (int32 i = 0; i < KeyFrameBone.BoneRotations.Num(); ++i, ++CurrentFrame)
+				{
+					TWraithAnimFrame<FQuat4f> BoneRotationKeyFrame = KeyFrameBone.BoneRotations[i];
 					// Unreal uses other axis type than COD engine
 					FRotator3f LocalRotator = BoneRotationKeyFrame.Value.Rotator();
 					LocalRotator.Yaw *= -1.0f;
 					LocalRotator.Roll *= -1.0f;
+					FQuat4f NewRotator = LocalRotator.Quaternion();
 
-					auto TimeInSeconds = static_cast<float>(BoneRotationKeyFrame.Frame) / Anim->Header.FrameRate;
-					RotationKeysX.Add(FRichCurveKey(TimeInSeconds, LocalRotator.Pitch));
-					RotationKeysY.Add(FRichCurveKey(TimeInSeconds, LocalRotator.Yaw));
-					RotationKeysZ.Add(FRichCurveKey(TimeInSeconds, LocalRotator.Roll));
+					// 手动插值
+					if (i == 0 && BoneRotationKeyFrame.Frame > 0)
+					{
+						while (CurrentFrame < BoneRotationKeyFrame.Frame)
+						{
+							RotationalKeys.Add(NewRotator);
+							++CurrentFrame;
+						}
+					}
+					else
+					{
+						while (CurrentFrame < BoneRotationKeyFrame.Frame)
+						{
+							uint32 LastFrame = KeyFrameBone.BoneRotations[i - 1].Frame;
+							RotationalKeys.Add(
+								FMath::Lerp(LastRotator, NewRotator,
+								            static_cast<float>(CurrentFrame - LastFrame) /
+								            static_cast<float>(BoneRotationKeyFrame.Frame - LastFrame)));
+							++CurrentFrame;
+						}
+					}
+					LastRotator = NewRotator;
+					RotationalKeys.Add(NewRotator);
 				}
-				RotCurveKeys.Add(RotationKeysZ);
-				RotCurveKeys.Add(RotationKeysX);
-				RotCurveKeys.Add(RotationKeysY);
-				for (int i = 0; i < 3; ++i)
+
+				// 设置缩放关键帧
+				CurrentFrame = 0;
+				for (int32 i = 0; i < KeyFrameBone.BoneScale.Num(); ++i, ++CurrentFrame)
 				{
-					const EVectorCurveChannel Axis = static_cast<EVectorCurveChannel>(i);
-					UAnimationCurveIdentifierExtensions::GetTransformChildCurveIdentifier(
-						TransformCurveId, ETransformCurveChannel::Rotation, Axis);
-					AnimSequence->GetController().SetCurveKeys(TransformCurveId, RotCurveKeys[i], bShouldTransact);
+					TWraithAnimFrame<FVector3f> BoneScaleKeyFrame = KeyFrameBone.BoneScale[i];
+
+					// 手动插值
+					if (i == 0 && BoneScaleKeyFrame.Frame > 0)
+					{
+						while (CurrentFrame < BoneScaleKeyFrame.Frame)
+						{
+							ScalingKeys.Add(BoneScaleKeyFrame.Value);
+							++CurrentFrame;
+						}
+					}
+					else
+					{
+						while (CurrentFrame < BoneScaleKeyFrame.Frame)
+						{
+							TWraithAnimFrame<FVector3f> LastScaleFrame = KeyFrameBone.BoneScale[i - 1];
+							ScalingKeys.Add(
+								FMath::Lerp(LastScaleFrame.Value, BoneScaleKeyFrame.Value,
+								            static_cast<float>(CurrentFrame - LastScaleFrame.Frame) /
+								            static_cast<float>(BoneScaleKeyFrame.Frame - LastScaleFrame.Frame)));
+							++CurrentFrame;
+						}
+					}
+					ScalingKeys.Add(BoneScaleKeyFrame.Value);
 				}
+
+				// 保证长度相同
+				int32 ArrLen = FMath::Max3(PositionalKeys.Num(), RotationalKeys.Num(), ScalingKeys.Num());
+				while (PositionalKeys.Num() < ArrLen)
+				{
+					if (PositionalKeys.IsEmpty())
+					{
+						PositionalKeys.Add(FVector3f::ZeroVector);
+					}
+					else
+					{
+						FVector3f LastItem = PositionalKeys.Last();
+						PositionalKeys.Add(LastItem);
+					}
+				}
+				while (RotationalKeys.Num() < ArrLen)
+				{
+					if (RotationalKeys.IsEmpty())
+					{
+						RotationalKeys.Add(FQuat4f());
+					}
+					else
+					{
+						FQuat4f LastItem = RotationalKeys.Last();
+						RotationalKeys.Add(LastItem);
+					}
+				}
+				while (ScalingKeys.Num() < ArrLen)
+				{
+					if (ScalingKeys.IsEmpty())
+					{
+						ScalingKeys.Add(FVector3f::OneVector);
+					}
+					else
+					{
+						FVector3f LastItem = ScalingKeys.Last();
+						ScalingKeys.Add(LastItem);
+					}
+				}
+
+				Controller.SetBoneTrackKeys(NewCurveName, PositionalKeys, RotationalKeys, ScalingKeys);
 			}
 		}
 
