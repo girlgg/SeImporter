@@ -1,5 +1,6 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class SeImporter : ModuleRules
@@ -7,30 +8,36 @@ public class SeImporter : ModuleRules
 	public SeImporter(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-		
+
+		var engineRoot = Path.GetFullPath(Target.RelativeEnginePath);
+
 		PublicIncludePaths.AddRange(
-			new string[] {
-				// ... add public include paths required here ...
+			new string[]
+			{
+				/*Path.Combine(engineRoot, "Plugins", "Experimental", "Animation", "SkeletalMeshModelingTools", "Source",
+					"SkeletalMeshModelingTools", "Private")*/
 			}
-			);
-				
-		
+		);
+
+
 		PrivateIncludePaths.AddRange(
-			new string[] {
+			new string[]
+			{
 				// ... add other private include paths required here ...
 			}
-			);
-			
-		
+		);
+
+
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
 				"Core",
-				// ... add other public dependencies that you statically link with here ...
+				"PhysicsCore",
+				"PhysicsUtilities"
 			}
-			);
-			
-		
+		);
+
+
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
@@ -38,18 +45,24 @@ public class SeImporter : ModuleRules
 				"Engine",
 				"Slate",
 				"SlateCore",
-				"SlateCore",
-				"UnrealEd"
-				// ... add private dependencies that you statically link with here ...	
+				"UnrealEd",
+				"MeshDescription",
+				"StaticMeshDescription",
+				"SkeletalMeshUtilitiesCommon",
+				"InputCore",
+				"ToolMenus",
+				"EditorStyle",
+				"Json",
+				"JsonUtilities"
 			}
-			);
-		
-		
+		);
+
+
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]
 			{
 				// ... add any modules that your module loads dynamically here ...
 			}
-			);
+		);
 	}
 }
