@@ -53,12 +53,12 @@ FMeshDescription SeModelStaticMesh::CreateMeshDescription(SeModel* InMesh)
 	const TVertexInstanceAttributesRef<FVector4f> TargetVertexInstanceColors =
 		CombinedMeshAttributes.GetVertexInstanceColors();
 
-	const int32 VertexCount = InMesh->Header->BoneCountBuffer;
+	const int32 VertexCount = InMesh->Header->HeaderBoneCount;
 	TargetVertexInstanceUVs.SetNumChannels(InMesh->UVSetCount + 1);
-	MeshDescription.ReserveNewVertices(InMesh->Header->BoneCountBuffer);
-	MeshDescription.ReserveNewVertexInstances(InMesh->Header->BoneCountBuffer);
-	MeshDescription.ReserveNewPolygons(InMesh->Header->MaterialCountBuffer);
-	MeshDescription.ReserveNewEdges(InMesh->Header->MaterialCountBuffer * 2);
+	MeshDescription.ReserveNewVertices(InMesh->Header->HeaderBoneCount);
+	MeshDescription.ReserveNewVertexInstances(InMesh->Header->HeaderBoneCount);
+	MeshDescription.ReserveNewPolygons(InMesh->Header->HeaderMaterialCount);
+	MeshDescription.ReserveNewEdges(InMesh->Header->HeaderMaterialCount * 2);
 	TArray<FVertexID> VertexIndexToVertexID;
 	VertexIndexToVertexID.Reserve(VertexCount);
 	TArray<FVertexInstanceID> VertexIndexToVertexInstanceID;
@@ -119,7 +119,7 @@ FMeshDescription SeModelStaticMesh::CreateMeshDescription(SeModel* InMesh)
 			MeshDescription.CreatePolygon(PolygonGroup, VertexInstanceIDs);
 		}
 
-		PolygonGroupNames[PolygonGroup] = FName(Surface->Name);
+		PolygonGroupNames[PolygonGroup] = FName(Surface->SurfaceName);
 	}
 
 	return MeshDescription;
@@ -175,7 +175,7 @@ UStaticMesh* SeModelStaticMesh::CreateStaticMeshFromMeshDescription(UObject* Par
 			SurfMaterials.Reserve(Surface->Materials.Num());
 			for (const uint16_t MaterialIndex : Surface->Materials)
 			{
-				SurfMaterials.Add(CoDMaterials[MaterialIndex]);
+				SurfMaterials.Push(CoDMaterials[MaterialIndex]);
 			}
 			if (MeshOptions->OverrideMasterMaterial.IsValid())
 			{
@@ -191,8 +191,8 @@ UStaticMesh* SeModelStaticMesh::CreateStaticMeshFromMeshDescription(UObject* Par
 			}
 		}
 		UEMat.UVChannelData.bInitialized = true;
-		UEMat.MaterialSlotName = FName(Surface->Name);
-		UEMat.ImportedMaterialSlotName = FName(Surface->Name);
+		UEMat.MaterialSlotName = FName(Surface->SurfaceName);
+		UEMat.ImportedMaterialSlotName = FName(Surface->SurfaceName);
 		StaticMaterials.Add(UEMat);
 		StaticMesh->GetSectionInfoMap().Set(0, i, FMeshSectionInfo(i));
 	}
@@ -294,7 +294,8 @@ void SeModelStaticMesh::CreateSkeleton(SeModel* InMesh, FString ObjectName, UObj
 {
 	FSkeletalMeshImportData SkeletonMeshImportData;
 
-	for (auto [Name, Non, ParentIndex, GlobalPosition, GlobalRotation, LocalPosition, LocalRotation] : InMesh->Bones)
+	for (auto [Name, Flags, ParentIndex, GlobalPosition, GlobalRotation, LocalPosition, LocalRotation, Scale] :
+	     InMesh->Bones)
 	{
 		SkeletalMeshImportData::FBone Bone;
 		Bone.Name = Name;

@@ -120,12 +120,12 @@ TSharedPtr<SBorder> SSeModelImportOptions::CreateMapHeader(SeModel* MeshHeader)
 		.AutoHeight()
 		[
 			AddNewHeaderProperty(FText::FromString("Materials:"),
-			                     FText::AsNumber(MeshHeader->Header->MaterialCountBuffer)).ToSharedRef()
+			                     FText::AsNumber(MeshHeader->Header->HeaderMaterialCount)).ToSharedRef()
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
-			AddNewHeaderProperty(FText::FromString("Bones:"), FText::AsNumber(MeshHeader->Header->BoneCountBuffer)).
+			AddNewHeaderProperty(FText::FromString("Bones:"), FText::AsNumber(MeshHeader->Header->HeaderBoneCount)).
 			ToSharedRef()
 		]
 	];

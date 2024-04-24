@@ -6,31 +6,34 @@ class FLargeMemoryReader;
 
 struct FSeModelWeight
 {
-	uint32_t VertexIndex;
-	uint32_t WeightID;
+	/** 顶点索引*/
+	uint32 VertexIndex;
+	/** 骨骼索引*/
+	uint32 WeightID;
+	/** 权重信息*/
 	float WeightValue;
 };
 
 struct FSeModelVertexColor
 {
-	uint8_t r, g, b, a;
+	uint8 R, G, B, A;
 
 	FColor ToFColor() const
 	{
-		return FColor(this->r, this->g, this->b, this->a);
+		return FColor(this->R, this->G, this->B, this->A);
 	}
 
 	FVector4f ToVector() const
 	{
-		return FVector4f(this->r / 255.0f, this->g / 255.0f, this->b / 255.0f, this->a / 255.0f);
+		return FVector4f(this->R / 255.0f, this->G / 255.0f, this->B / 255.0f, this->A / 255.0f);
 	}
 
 	friend FArchive& operator<<(FArchive& Ar, FSeModelVertexColor& Color)
 	{
-		Ar << Color.r;
-		Ar << Color.g;
-		Ar << Color.b;
-		Ar << Color.a;
+		Ar << Color.R;
+		Ar << Color.G;
+		Ar << Color.B;
+		Ar << Color.A;
 		return Ar;
 	}
 };
@@ -53,21 +56,22 @@ class SEIMPORTER_API FSeModelSurface
 {
 public:
 	explicit FSeModelSurface(FLargeMemoryReader& Reader, uint32_t BufferBoneCount, uint16_t SurfaceCount,
-	                        int GlobalSurfaceVertCounter);
-	
-	FString Name;
+	                         const int GlobalSurfaceVertCounter, bool bUseUVs = true, bool bUseNormals = true,
+	                         bool bUseColors = true, bool bUseWeights = true);
+
+	FString SurfaceName;
 	TArray<FSeModelVertex> Vertexes;
 	TArray<FGfxFace> Faces;
-	TArray<int32_t> Materials;
-	uint8_t UVCount{0};
+	TArray<int32> Materials;
+	uint8 UVCount{0};
 
-	int SurfaceVertexCounter;
-	uint32_t BoneCountBuffer;
-	uint8_t Empty;
-	uint8_t MaterialCount;
-	uint32_t FaceCount;
-	uint32_t VertCount;
-	uint8_t MaxSkinBuffer;
+	int32 SurfaceVertexCounter{0};
+	uint32 BoneCountBuffer{0};
+	uint8 Flags{0};
+	uint8 MaterialReferenceCount{0};
+	uint32 FaceCount{0};
+	uint32 VertexCount{0};
+	uint8 MaxSkinInfluence{0};
 
 	TArray<FGfxFace> ParseFaces(FLargeMemoryReader& Reader) const;
 	TArray<FSeModelWeight> ParseWeight(FLargeMemoryReader& Reader, const uint32_t CurrentVertIndex) const;

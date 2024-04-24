@@ -13,13 +13,14 @@ struct FSeModelMeshMaterial
 
 struct FSeModelMeshBone
 {
-	FString Name;
-	uint8 Non;
-	uint32_t ParentIndex;
-	FVector3f GlobalPosition;
-	FRotator3f GlobalRotation;
-	FVector3f LocalPosition;
-	FRotator3f LocalRotation;
+	FString Name{""};
+	uint8 Flags{0};
+	uint32 ParentIndex{0};
+	FVector3f GlobalPosition{FVector3f::ZeroVector};
+	FRotator3f GlobalRotation{FRotator3f::ZeroRotator};
+	FVector3f LocalPosition{FVector3f::ZeroVector};
+	FRotator3f LocalRotation{FRotator3f::ZeroRotator};
+	FVector3f Scale{FVector3f::ZeroVector};
 };
 
 class SEIMPORTER_API SeModel
@@ -31,7 +32,6 @@ public:
 	TArray<FSeModelMeshBone> Bones;
 	TArray<FSeModelSurface*> Surfaces;
 	TArray<FSeModelMeshMaterial> Materials;
-	bool bIsXModel = false;
 	bool bIsSkeletal = false;
 	int SurfaceVertCounter{0};
 	uint8_t MaterialCount{1};

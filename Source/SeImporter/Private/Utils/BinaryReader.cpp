@@ -5,6 +5,6 @@ void FBinaryReader::ReadString(FArchive& Ar, FString* OutText)
 	char Ch;
 	while(Ar << Ch, Ch != 0)
 	{
-		*OutText += Ch;
+		OutText->AppendChar(Ch);
 	}
 }

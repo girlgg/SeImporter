@@ -4,21 +4,22 @@
 
 SeModelHeader::SeModelHeader(const FString& Filename, FLargeMemoryReader& Reader)
 {
-	DataPresentFlags = ESeModelDataPresenceFlags::SEMODEL_PRESENCE_MESH;
-	GameName = "";
-	MeshName =Filename;
+	MeshName = Filename;
 
-	Reader.ByteOrderSerialize(&Data, sizeof(Data));
-	uint16_t Version;
-	uint16_t HeaderSize;
+	Reader.ByteOrderSerialize(&Magic, sizeof(Magic));
+	uint16 Version;
+	uint16 HeaderSize;
 	Reader << Version;
 	Reader << HeaderSize;
+	
 	Reader << DataPresentFlags;
 	Reader << BonePresentFlags;
 	Reader << MeshPresentFlags;
-	Reader << BoneCountBuffer;
-	Reader << SurfaceCount;
-	Reader << MaterialCountBuffer;
-	uint8_t ReservedBytes[3];
-	Reader.ByteOrderSerialize(&ReservedBytes, sizeof(ReservedBytes));
+	
+	Reader << HeaderBoneCount;
+	Reader << HeaderMeshCount;
+	Reader << HeaderMaterialCount;
+	
+	char TmpData[20];
+	Reader.ByteOrderSerialize(&TmpData, HeaderSize - 17);
 }

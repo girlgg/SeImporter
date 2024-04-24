@@ -3,6 +3,9 @@
 class SEIMPORTER_API FBinaryReader
 {
 public:
+	/*
+	 * 读取字符串直到空格
+	 */
 	static void ReadString(FArchive& Ar, FString* OutText);
 
 	template <typename T>

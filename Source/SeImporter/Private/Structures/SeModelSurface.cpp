@@ -2,56 +2,68 @@
 #include "Serialization/LargeMemoryReader.h"
 
 FSeModelSurface::FSeModelSurface(FLargeMemoryReader& Reader, uint32_t BufferBoneCount, uint16_t SurfaceCount,
-                                 int GlobalSurfaceVertCounter)
+                                 const int GlobalSurfaceVertCounter, bool bUseUVs, bool bUseNormals,
+                                 bool bUseColors, bool bUseWeights)
 {
 	SurfaceVertexCounter = GlobalSurfaceVertCounter;
 	BoneCountBuffer = BufferBoneCount;
 
-	Reader << Empty;
-	Reader << MaterialCount;
-	Reader << MaxSkinBuffer;
-	Reader << VertCount;
+	Reader << Flags;
+	Reader << MaterialReferenceCount;
+	Reader << MaxSkinInfluence;
+
+	if (!bUseUVs)
+	{
+		MaterialReferenceCount = 0;
+	}
+	if (!bUseWeights)
+	{
+		MaxSkinInfluence = 0;
+	}
+
+	Reader << VertexCount;
 	Reader << FaceCount;
 
-	Name = FString::Format(TEXT("surf_{0}"), {SurfaceCount});
-
-	for (size_t i = 0; i < VertCount; i++)
+	// 读取顶点
+	Vertexes.SetNum(VertexCount);
+	for (auto& Vertex : Vertexes)
 	{
-		FSeModelVertex Vertex;
 		Reader << Vertex.Position;
-		Vertexes.Add(Vertex);
 	}
-
-	for (size_t i = 0; i < VertCount; i++)
+	for (auto& Vertex : Vertexes)
 	{
-		Reader << Vertexes[i].UV;
+		Reader << Vertex.UV;
 	}
-	for (size_t i = 0; i < VertCount; i++)
+	for (auto& Vertex : Vertexes)
 	{
-		Reader << Vertexes[i].Normal;
+		Reader << Vertex.Normal;
 	}
-	for (size_t i = 0; i < VertCount; i++)
+	for (auto& Vertex : Vertexes)
 	{
-		Reader << Vertexes[i].Color;
+		Reader << Vertex.Color;
 	}
-	for (size_t i = 0; i < VertCount; i++)
+	for (uint32 i = 0; i < VertexCount; ++i)
 	{
 		Vertexes[i].Weights = ParseWeight(Reader, i);
 	}
 
+	// 读取面
 	Faces = ParseFaces(Reader);
-	Materials = FBinaryReader::ReadList<int32_t>(Reader, MaterialCount);
+	// 读取材质
+	Materials = FBinaryReader::ReadList<int32>(Reader, MaterialReferenceCount);
+
+	SurfaceName = FString::Format(TEXT("surf_{0}"), {SurfaceCount});
 }
 
 TArray<FGfxFace> FSeModelSurface::ParseFaces(FLargeMemoryReader& Reader) const
 {
 	TArray<FGfxFace> RetFaces;
-	for (uint32_t i = 0; i < FaceCount; i++)
+	RetFaces.SetNum(FaceCount);
+	for (FGfxFace& Face : RetFaces)
 	{
-		FGfxFace Face;
-		if (VertCount <= 0xFF)
+		if (VertexCount <= 0xFF)
 		{
-			uint8_t Index1, Index2, Index3;
+			uint8 Index1, Index2, Index3;
 			Reader << Index3;
 			Reader << Index2;
 			Reader << Index1;
@@ -59,9 +71,9 @@ TArray<FGfxFace> FSeModelSurface::ParseFaces(FLargeMemoryReader& Reader) const
 			Face.Index[1] = Index2 + SurfaceVertexCounter;
 			Face.Index[2] = Index3 + SurfaceVertexCounter;
 		}
-		else if (VertCount <= 0xFFFF)
+		else if (VertexCount <= 0xFFFF)
 		{
-			uint16_t Index1, Index2, Index3;
+			uint16 Index1, Index2, Index3;
 			Reader << Index3;
 			Reader << Index2;
 			Reader << Index1;
@@ -71,7 +83,7 @@ TArray<FGfxFace> FSeModelSurface::ParseFaces(FLargeMemoryReader& Reader) const
 		}
 		else
 		{
-			int Index1, Index2, Index3;
+			uint32 Index1, Index2, Index3;
 			Reader << Index1;
 			Reader << Index2;
 			Reader << Index3;
@@ -79,7 +91,6 @@ TArray<FGfxFace> FSeModelSurface::ParseFaces(FLargeMemoryReader& Reader) const
 			Face.Index[1] = Index2 + SurfaceVertexCounter;
 			Face.Index[2] = Index3 + SurfaceVertexCounter;
 		}
-		RetFaces.Add(Face);
 	}
 	return RetFaces;
 }
@@ -87,9 +98,9 @@ TArray<FGfxFace> FSeModelSurface::ParseFaces(FLargeMemoryReader& Reader) const
 TArray<FSeModelWeight> FSeModelSurface::ParseWeight(FLargeMemoryReader& Reader, const uint32_t CurrentVertIndex) const
 {
 	TArray<FSeModelWeight> C2Weights;
-	for (uint32_t i = 0; i < MaxSkinBuffer; i++)
+	C2Weights.SetNum(MaxSkinInfluence);
+	for (FSeModelWeight& Weight : C2Weights)
 	{
-		FSeModelWeight Weight;
 		if (BoneCountBuffer <= 0xFF)
 		{
 			uint8_t WeightID;
@@ -110,7 +121,6 @@ TArray<FSeModelWeight> FSeModelSurface::ParseWeight(FLargeMemoryReader& Reader, 
 		}
 		Reader << Weight.WeightValue;
 		Weight.VertexIndex = CurrentVertIndex + SurfaceVertexCounter;
-		C2Weights.Add(Weight);
 	}
 	return C2Weights;
 }
