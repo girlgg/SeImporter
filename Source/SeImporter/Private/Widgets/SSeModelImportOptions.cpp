@@ -166,6 +166,11 @@ bool SSeModelImportOptions::ShouldImportAll()
 	return UserDlgResponse == EPSAImportOptionDlgResponse::ImportAll;
 }
 
+bool SSeModelImportOptions::ShouldCancel()
+{
+	return UserDlgResponse == EPSAImportOptionDlgResponse::Cancel;
+}
+
 FReply SSeModelImportOptions::OnImportAll()
 {
 	UserDlgResponse = EPSAImportOptionDlgResponse::ImportAll;

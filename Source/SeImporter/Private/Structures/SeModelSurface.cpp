@@ -1,5 +1,6 @@
 ﻿#include "Structures/SeModelSurface.h"
 #include "Serialization/LargeMemoryReader.h"
+#include "Utils/BinaryReader.h"
 
 FSeModelSurface::FSeModelSurface(FLargeMemoryReader& Reader, uint32_t BufferBoneCount, uint16_t SurfaceCount,
                                  const int GlobalSurfaceVertCounter, bool bUseUVs, bool bUseNormals,
@@ -44,7 +45,30 @@ FSeModelSurface::FSeModelSurface(FLargeMemoryReader& Reader, uint32_t BufferBone
 	}
 	for (uint32 i = 0; i < VertexCount; ++i)
 	{
-		Vertexes[i].Weights = ParseWeight(Reader, i);
+		Vertexes[i].Weights.SetNum(MaxSkinInfluence);
+		for (FSeModelWeight& Weight : Vertexes[i].Weights)
+		{
+			if (BoneCountBuffer <= 0xFF)
+			{
+				uint8_t WeightID;
+				Reader << WeightID;
+				Weight.WeightID = WeightID;
+			}
+			else if (BoneCountBuffer <= 0xFFFF)
+			{
+				uint16_t WeightID;
+				Reader << WeightID;
+				Weight.WeightID = WeightID;
+			}
+			else
+			{
+				uint32_t WeightID;
+				Reader << WeightID;
+				Weight.WeightID = WeightID;
+			}
+			Reader << Weight.WeightValue;
+			Weight.VertexIndex = i + SurfaceVertexCounter;
+		}
 	}
 
 	// 读取面
@@ -93,34 +117,4 @@ TArray<FGfxFace> FSeModelSurface::ParseFaces(FLargeMemoryReader& Reader) const
 		}
 	}
 	return RetFaces;
-}
-
-TArray<FSeModelWeight> FSeModelSurface::ParseWeight(FLargeMemoryReader& Reader, const uint32_t CurrentVertIndex) const
-{
-	TArray<FSeModelWeight> C2Weights;
-	C2Weights.SetNum(MaxSkinInfluence);
-	for (FSeModelWeight& Weight : C2Weights)
-	{
-		if (BoneCountBuffer <= 0xFF)
-		{
-			uint8_t WeightID;
-			Reader << WeightID;
-			Weight.WeightID = WeightID;
-		}
-		else if (BoneCountBuffer <= 0xFFFF)
-		{
-			uint16_t WeightID;
-			Reader << WeightID;
-			Weight.WeightID = WeightID;
-		}
-		else
-		{
-			uint32_t WeightID;
-			Reader << WeightID;
-			Weight.WeightID = WeightID;
-		}
-		Reader << Weight.WeightValue;
-		Weight.VertexIndex = CurrentVertIndex + SurfaceVertexCounter;
-	}
-	return C2Weights;
 }

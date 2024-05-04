@@ -68,7 +68,13 @@ UObject* USeModelAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPar
 		FSlateApplication::Get().AddModalWindow(Window, ParentWindow, false);
 		bImport = ImportOptionsWindow.Get()->ShouldImport();
 		bImportAll = ImportOptionsWindow.Get()->ShouldImportAll();
+		bCancel = ImportOptionsWindow.Get()->ShouldCancel();
 		UserSettings->bInitialized = true;
+	}
+	if (bCancel)
+	{
+		bOutOperationCanceled = true;
+		return nullptr;
 	}
 
 	if (!UserSettings->bImportMaterials)
@@ -115,7 +121,7 @@ UObject* USeModelAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPar
 	MeshCreated = MeshBuildingClass.CreateMesh(InParent, Mesh, SeModelMaterials);
 
 	UEditorLoadingAndSavingUtils::SaveDirtyPackages(true, true);
-	
+
 	if (MeshCreated && GEditor)
 	{
 		if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())

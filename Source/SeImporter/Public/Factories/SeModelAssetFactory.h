@@ -22,6 +22,7 @@ public:
 	UUserMeshOptions* UserSettings;
 	bool bImport;
 	bool bImportAll;
+	bool bCancel;
 	//~ UFactory Interface
 	virtual UObject* FactoryCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags,
 	                                   const FString& Filename, const TCHAR* Parms, FFeedbackContext* Warn,

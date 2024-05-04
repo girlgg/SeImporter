@@ -1,7 +1,5 @@
 ﻿#pragma once
 
-#include "Utils/BinaryReader.h"
-
 class FLargeMemoryReader;
 
 struct FSeModelWeight
@@ -74,5 +72,4 @@ public:
 	uint8 MaxSkinInfluence{0};
 
 	TArray<FGfxFace> ParseFaces(FLargeMemoryReader& Reader) const;
-	TArray<FSeModelWeight> ParseWeight(FLargeMemoryReader& Reader, const uint32_t CurrentVertIndex) const;
 };
