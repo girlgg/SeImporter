@@ -3,6 +3,7 @@
 
 #include "Factories/SeAnimAssetFactory.h"
 
+#include "AnimPose.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Serialization/LargeMemoryReader.h"
