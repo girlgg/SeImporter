@@ -51,7 +51,8 @@ public class SeImporter : ModuleRules
 				"ToolMenus",
 				"EditorStyle",
 				"Json",
-				"JsonUtilities"
+				"JsonUtilities",
+   				"AnimationBlueprintLibrary"
 			}
 		);
 
