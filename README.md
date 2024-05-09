@@ -1,3 +1,3 @@
 # SeImporter
- Based on https://github.com/djhaled/Unreal-SeTools
- Only the basic import animation function is available
+ Based on ()[https://github.com/djhaled/Unreal-SeTools]
+ Allow Unreal Engine 5 to import. model and. seanim format files.
