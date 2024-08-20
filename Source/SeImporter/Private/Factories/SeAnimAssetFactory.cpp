@@ -342,7 +342,11 @@ UObject* USeAnimAssetFactory::FactoryCreateFile
                    for (size_t i = 0; i < KeyFrameBone.BoneRotations.Num(); i++)
                    {
                        auto BoneRotationKeyFrame = KeyFrameBone.BoneRotations[i];
+
+			BoneRotationKeyFrame.Value=BoneRotationKeyFrame.Value.Quaternion();
                        BoneRotationKeyFrame.Value *=  FQuat4f(Rel_Rotation);//////////？？？------------------
+
+			   
                        // Unreal uses other axis type than COD engine  虚幻引擎使用COD引擎以外的其他轴类型
                        FRotator3f LocalRotator = BoneRotationKeyFrame.Value.Rotator(); ///只有addtive有用
                        LocalRotator.Yaw *= -1.0f;
@@ -375,6 +379,7 @@ UObject* USeAnimAssetFactory::FactoryCreateFile
                    CurrentFrame = 0;
                    for (int32 i = 0; i < KeyFrameBone.BoneRotations.Num(); ++i, ++CurrentFrame)
                    {
+			BoneRotationKeyFrame.Value=BoneRotationKeyFrame.Value.Quaternion();
                       TWraithAnimFrame<FQuat4f> BoneRotationKeyFrame = KeyFrameBone.BoneRotations[i];
                        BoneRotationKeyFrame.Value *=  FQuat4f(Rel_Rotation);//添加旋转
                        // Unreal uses other axis type than COD engine
