@@ -21,19 +21,17 @@
 UObject* SeModelStaticMesh::CreateMesh(UObject* ParentPackage, SeModel* InMesh,
                                        const TArray<FSeModelMaterial*>& CoDMaterials) const
 {
-	const FMeshDescription InMeshDescription = CreateMeshDescription(InMesh);
-	UStaticMesh* StaticMesh = CreateStaticMeshFromMeshDescription(ParentPackage, InMeshDescription, InMesh,
-	                                                              CoDMaterials);
-	if (MeshOptions->MeshType == EMeshType::SkeletalMesh)
+	if (MeshOptions->MeshType == EMeshType::StaticMesh)
 	{
-		USkeletalMesh* NewSkeletalMesh = CreateSkeletalMeshFromStaticMesh(ParentPackage, StaticMesh, InMesh);
-
-		StaticMesh->RemoveFromRoot();
-		StaticMesh->MarkAsGarbage();
-
-		return NewSkeletalMesh;
+		const FMeshDescription MeshDescription = CreateMeshDescription(InMesh);
+		return CreateStaticMeshFromMeshDescription(ParentPackage, MeshDescription, InMesh,
+		                                           CoDMaterials);
 	}
-	return StaticMesh;
+	/*if (MeshOptions->MeshType == EMeshType::SkeletalMesh)
+	{
+		return CreateSkeletalMesh(ParentPackage, InMesh);
+	}*/
+	return nullptr;
 }
 
 FMeshDescription SeModelStaticMesh::CreateMeshDescription(SeModel* InMesh)
@@ -130,12 +128,8 @@ UStaticMesh* SeModelStaticMesh::CreateStaticMeshFromMeshDescription(UObject* Par
                                                                     SeModel* InMesh,
                                                                     TArray<FSeModelMaterial*> CoDMaterials) const
 {
-	const FString ObjectName = InMesh->Header->MeshName;
-
-	FString NewName = ObjectName + "_Static";
-	UPackage* StaticMeshPackage = CreatePackage(
-		*FPaths::Combine(FPaths::GetPath(ParentPackage->GetPathName()), NewName));
-	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(StaticMeshPackage, FName(*NewName), RF_Public | RF_Standalone);
+	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(ParentPackage, *InMesh->Header->MeshName,
+	                                                 RF_Public | RF_Standalone);
 
 	// Set default settings
 	StaticMesh->InitResources();
@@ -151,7 +145,6 @@ UStaticMesh* SeModelStaticMesh::CreateStaticMeshFromMeshDescription(UObject* Par
 	SrcModel.BuildSettings.DstLightmapIndex = InMesh->UVSetCount; // We use last UV set for lightmap
 	SrcModel.BuildSettings.bUseMikkTSpace = true;
 
-	// Get & Set Mesh Description
 	FMeshDescription* MeshDescription = StaticMesh->GetMeshDescription(0);
 
 	if (!MeshDescription)
@@ -168,7 +161,7 @@ UStaticMesh* SeModelStaticMesh::CreateStaticMeshFromMeshDescription(UObject* Par
 
 		// Static Material for Surface
 		FStaticMaterial&& UEMat = FStaticMaterial(UMaterial::GetDefaultMaterial(MD_Surface));
-		if (Surface->Materials.Num() > 0 && MeshOptions->bImportMaterials && !CoDMaterials.IsEmpty())
+		if (Surface->Materials.Num() > 0 && !CoDMaterials.IsEmpty())
 		{
 			// Create an array of Surface Materials
 			TArray<FSeModelMaterial*> SurfMaterials;
@@ -214,10 +207,8 @@ UStaticMesh* SeModelStaticMesh::CreateStaticMeshFromMeshDescription(UObject* Par
 	return StaticMesh;
 }
 
-USkeletalMesh* SeModelStaticMesh::CreateSkeletalMeshFromStaticMesh(UObject* ParentPackage, UStaticMesh* Mesh,
-                                                                   SeModel* InMesh) const
+USkeletalMesh* SeModelStaticMesh::CreateSkeletalMesh(UObject* ParentPackage, SeModel* InMesh) const
 {
-	// UPackage* ParentPackage = Mesh->GetPackage();
 	USkeleton* Skeleton = nullptr;
 	FReferenceSkeleton RefSkeleton;
 	CreateSkeleton(InMesh, InMesh->Header->MeshName, ParentPackage, RefSkeleton, Skeleton);
@@ -225,8 +216,27 @@ USkeletalMesh* SeModelStaticMesh::CreateSkeletalMeshFromStaticMesh(UObject* Pare
 	USkeletalMesh* SkeletalMesh = NewObject<USkeletalMesh>(ParentPackage, *InMesh->Header->MeshName,
 	                                                       RF_Public | RF_Standalone);
 
-	FStaticToSkeletalMeshConverter::InitializeSkeletalMeshFromStaticMesh(SkeletalMesh, Mesh, RefSkeleton, "");
+	TArray<SkeletalMeshImportData::FRawBoneInfluence> Influences;
+	for (const auto& Surface : InMesh->Surfaces)
+	{
+		for (const auto& Vertex : Surface->Vertexes)
+		{
+			for (const auto& [VertexIndex, WeightID, WeightValue] : Vertex.Weights)
+			{
+				if (WeightValue > 0)
+				{
+					SkeletalMeshImportData::FRawBoneInfluence Influence;
+					Influence.BoneIndex = WeightID;
+					Influence.VertexIndex = VertexIndex;
+					Influence.Weight = WeightValue;
+					Influences.Add(Influence);
+				}
+			}
+		}
+	}
 
+	/*FStaticToSkeletalMeshConverter::InitializeSkeletalMeshFromStaticMesh(SkeletalMesh, Mesh, RefSkeleton, "");
+	
 	FSkeletalMeshImportData SkeletalMeshImportData;
 	SkeletalMesh->LoadLODImportedData(0, SkeletalMeshImportData);
 	TArray<SkeletalMeshImportData::FRawBoneInfluence> Influences;
@@ -250,6 +260,7 @@ USkeletalMesh* SeModelStaticMesh::CreateSkeletalMeshFromStaticMesh(UObject* Pare
 	}
 	SkeletalMeshImportData.Influences = Influences;
 	SkeletalMesh->SaveLODImportedData(0, SkeletalMeshImportData);
+
 	SkeletalMesh->CalculateInvRefMatrices();
 
 	FSkeletalMeshBuildSettings BuildOptions;
@@ -284,7 +295,7 @@ USkeletalMesh* SeModelStaticMesh::CreateSkeletalMeshFromStaticMesh(UObject* Pare
 
 	FAssetRegistryModule::AssetCreated(SkeletalMesh);
 	Skeleton->GetPackage()->FullyLoad();
-	SkeletalMesh->MarkPackageDirty();
+	SkeletalMesh->MarkPackageDirty();*/
 
 	return SkeletalMesh;
 }
@@ -306,7 +317,7 @@ void SeModelStaticMesh::CreateSkeleton(SeModel* InMesh, FString ObjectName, UObj
 		PskBoneRotEu.Roll *= -1.0;
 		if (Bone.Name == "j_mainroot")
 		{
-			PskBoneRotEu.Roll = MeshOptions->OverrideSkeletonRootRoll;
+			// PskBoneRotEu.Roll = MeshOptions->OverrideSkeletonRootRoll;
 		}
 		FQuat4f PskBoneRot = PskBoneRotEu.Quaternion();
 		FTransform3f PskTransform;
@@ -320,9 +331,9 @@ void SeModelStaticMesh::CreateSkeleton(SeModel* InMesh, FString ObjectName, UObj
 	}
 	FString NewName = "SK_" + ObjectName;
 	auto SkeletonPackage = CreatePackage(*FPaths::Combine(FPaths::GetPath(ParentPackage->GetPathName()), NewName));
-	OutSkeleton = MeshOptions->OverrideSkeleton.IsValid()
+	OutSkeleton = /*MeshOptions->OverrideSkeleton.IsValid()
 		              ? MeshOptions->OverrideSkeleton.LoadSynchronous()
-		              : NewObject<USkeleton>(SkeletonPackage, FName(*NewName), RF_Public | RF_Standalone);
+		              :*/ NewObject<USkeleton>(SkeletonPackage, FName(*NewName), RF_Public | RF_Standalone);
 	auto SkeletalDepth = 0;
 	ProcessSkeleton(SkeletonMeshImportData, OutSkeleton, OutRefSkeleton, SkeletalDepth);
 }
@@ -412,13 +423,13 @@ UTexture2D* SeModelStaticMesh::ImportTexture(const FString& FilePath, const FStr
 }
 
 bool SeModelStaticMesh::ImportSeModelTexture(FSeModelTexture& SeModelTexture, const FString& ParentPath,
-                                             const FString& LineContent, const FString& BasePath)
+									 const FString& LineContent, const FString& BasePath, const FString& ImageFormat)
 {
 	TArray<FString> LineParts;
 	LineContent.ParseIntoArray(LineParts, TEXT(","), false);
 	FString TextureAddress = LineParts[0];
 	FString TextureName = LineParts[1];
-	SeModelTexture.TexturePath = FPaths::Combine(BasePath, TextureName + ".png");
+	SeModelTexture.TexturePath = FPaths::Combine(BasePath, TextureName + "." + ImageFormat);
 	SeModelTexture.TextureName = TextureName;
 	SeModelTexture.TextureType = TEXT("Normal");
 

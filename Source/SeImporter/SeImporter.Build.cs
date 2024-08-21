@@ -1,3 +1,5 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
 using System.IO;
 using UnrealBuildTool;
 
@@ -51,8 +53,7 @@ public class SeImporter : ModuleRules
 				"ToolMenus",
 				"EditorStyle",
 				"Json",
-				"JsonUtilities",
-   				"AnimationBlueprintLibrary"
+				"JsonUtilities"
 			}
 		);
 

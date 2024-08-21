@@ -1,9 +1,6 @@
 #include "Factories/SeModelAssetFactory.h"
 
-#include "AssetToolsModule.h"
-#include "AutomatedAssetImportData.h"
 #include "FileHelpers.h"
-#include "AssetRegistry/AssetRegistryModule.h"
 #include "Interfaces/IMainFrameModule.h"
 #include "Serialization/LargeMemoryReader.h"
 #include "Structures/SeModel.h"
@@ -61,10 +58,6 @@ UObject* USeModelAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPar
 			.MeshHeader(Mesh)
 		);
 		UserSettings = ImportOptionsWindow.Get()->Options;
-		if (Mesh->Bones.Num() > 1)
-		{
-			UserSettings->MeshType = EMeshType::SkeletalMesh;
-		}
 		FSlateApplication::Get().AddModalWindow(Window, ParentWindow, false);
 		bImport = ImportOptionsWindow.Get()->ShouldImport();
 		bImportAll = ImportOptionsWindow.Get()->ShouldImportAll();
@@ -75,11 +68,6 @@ UObject* USeModelAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPar
 	{
 		bOutOperationCanceled = true;
 		return nullptr;
-	}
-
-	if (!UserSettings->bImportMaterials)
-	{
-		Mesh->Materials.Empty();
 	}
 
 	FString DiskMaterialsPath = FPaths::GetPath(Filename);
@@ -99,11 +87,13 @@ UObject* USeModelAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPar
 		{
 			for (int32 LineIndex = 1; LineIndex < MaterialTextContent.Num(); ++LineIndex)
 			{
-				// 导入材质
 				if (FSeModelTexture CodTexture;
-					SeModelStaticMesh::ImportSeModelTexture(CodTexture, ParentPath, MaterialTextContent[LineIndex],
-					                                        FPaths::Combine(
-						                                        DiskTexturesPath, MeshMaterial.MaterialName)))
+					SeModelStaticMesh::ImportSeModelTexture(
+						CodTexture, ParentPath, MaterialTextContent[LineIndex],
+						FPaths::Combine(
+							DiskTexturesPath,
+							MeshMaterial.MaterialName),
+						UserSettings->MaterialImageFormat))
 				{
 					CoDMaterial->Textures.Add(CodTexture);
 				}
@@ -114,20 +104,17 @@ UObject* USeModelAssetFactory::FactoryCreateFile(UClass* InClass, UObject* InPar
 
 	SeModelStaticMesh MeshBuildingClass;
 	MeshBuildingClass.MeshOptions = UserSettings;
-	if (UserSettings->bAutomaticallyDecideMeshType && Mesh->Bones.Num() > 1)
-	{
-		UserSettings->MeshType = EMeshType::SkeletalMesh;
-	}
 	MeshCreated = MeshBuildingClass.CreateMesh(InParent, Mesh, SeModelMaterials);
 
 	UEditorLoadingAndSavingUtils::SaveDirtyPackages(true, true);
 
-	if (MeshCreated && GEditor)
+	/*if (MeshCreated && GEditor)
 	{
 		if (UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>())
 		{
 			AssetEditorSubsystem->OpenEditorForAsset(MeshCreated);
 		}
-	}
+	}*/
+
 	return MeshCreated;
 }

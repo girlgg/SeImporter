@@ -313,7 +313,7 @@ FReply FSeImporterModule::OnConfirmImport(TSharedRef<SWindow> DialogWindow,
 											CodTexture, GameModelPath,
 											MaterialTextContent[LineIndex],
 											FPaths::Combine(
-												DiskTexturesPath, MeshMaterial.MaterialName)))
+												DiskTexturesPath, MeshMaterial.MaterialName),"png"))
 									{
 										CoDMaterial->Textures.Add(CodTexture);
 									}

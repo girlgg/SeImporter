@@ -14,8 +14,6 @@ class SEIMPORTER_API USeAnimAssetFactory : public UFactory
 {
 	GENERATED_BODY()
 
-
-	TArray<FTransform> BonePoses;
 protected:
 	USeAnimAssetFactory(const FObjectInitializer& ObjectInitializer);
 	virtual UObject* FactoryCreateFile(UClass* InClass, UObject* InParent, FName InName, EObjectFlags Flags,
