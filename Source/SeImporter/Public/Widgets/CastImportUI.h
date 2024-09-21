@@ -1,0 +1,70 @@
+﻿#pragma once
+
+#include "CastImportUI.generated.h"
+
+UENUM(BlueprintType)
+enum ECastImportType : int8
+{
+	Cast_StaticMesh UMETA(DisplayName="Static Mesh"),
+	Cast_SkeletalMesh UMETA(DisplayName="Skeletal Mesh"),
+	Cast_Animation UMETA(DisplayName="Animation"),
+
+	Cast_Max,
+};
+
+UENUM(BlueprintType)
+enum ECastMaterialType : int8
+{
+	CastMT_IW9 UMETA(DisplayName="IW9 Engine Material")
+};
+
+UCLASS(BlueprintType, config=EditorPerProjectUserSettings, AutoExpandCategories=(FTransform), HideCategories=Object,
+	MinimalAPI)
+class UCastImportUI : public UObject
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Mesh, meta=(ImportType="SkeletalMesh|SkeletalMesh"))
+	TObjectPtr<class USkeleton> Skeleton{nullptr};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Mesh,
+		meta = (ImportType = "StaticMesh|SkeletalMesh", DisplayName="As Skeletal Mesh"))
+	bool bImportAsSkeletal{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Mesh, meta=(ImportType="SkeletalMesh"))
+	bool bImportMesh{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, config, Category=Mesh,
+		meta=(ImportType="SkeletalMesh"))
+	bool bPhysicsAsset{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, Category=Mesh,
+		meta=(ImportType="SkeletalMesh", EditCondition="bPhysicsAsset"))
+	TObjectPtr<class UPhysicsAsset> PhysicsAsset{nullptr};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation"))
+	bool bImportAnimations{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation"))
+	bool bAddRefPosToAnimations{false};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
+	bool bMaterials{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
+		meta=(ImportType="GeoOnly", EditCondition="bMaterials"))
+	bool bUseGlobalMaterialsPath{false};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
+		meta=(ImportType="GeoOnly", EditCondition="bUseGlobalMaterialsPath"))
+	FString GlobalMaterialPath;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
+	TEnumAsByte<ECastMaterialType> MaterialType;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
+	FString TextureFormat{"png"};
+
+	void ResetToDefault();
+};
