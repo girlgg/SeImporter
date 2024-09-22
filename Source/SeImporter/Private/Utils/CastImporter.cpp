@@ -1246,7 +1246,11 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 		FVector3f LastScale = ScalingKeys.Last();
 		while (ScalingKeys.Num() < (int32)NumberOfFrames) ScalingKeys.Add(LastScale);
 
-		Controller.AddBoneCurve(NewCurveName, false);
+		if ((ImportOptions->AnimImportType == CastAIT_Auto && AnimMode == CastAIT_Absolutely) ||
+			ImportOptions->AnimImportType == CastAIT_Absolutely)
+		{
+			Controller.AddBoneCurve(NewCurveName, false);
+		}
 		Controller.SetBoneTrackKeys(NewCurveName, PositionalKeys, RotationalKeys, ScalingKeys);
 	}
 
