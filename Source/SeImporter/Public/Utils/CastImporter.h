@@ -49,14 +49,13 @@ struct FCastImportOptions
 	FString GlobalMaterialPath;
 	FString TextureFormat;
 
-	ECastMaterialType MaterialType;
-
 	bool bImportMaterial;
 	bool bUseGlobalMaterialsPath;
 	bool bImportAsSkeletal;
 	bool bImportMesh;
 	bool bImportAnimations;
 	ECastAnimImportType AnimImportType;
+	ECastEngineType EngineType;
 };
 
 struct FCastMaterial
@@ -84,10 +83,10 @@ public:
 	bool GetSceneInfo(FString Filename);
 	bool ImportFile(FString Filename);
 	bool ImportFromFile(FString Filename);
-	void AnalysisMaterial(FString ParentPath, FString MaterialPath, FString TexturePath, ECastMaterialType MaterialType,
+	void AnalysisMaterial(FString ParentPath, FString MaterialPath, FString TexturePath,
 	                      FString TextureFormat);
 	bool AnalysisTexture(FCastTextureInfo& Texture, FString ParentPath, FString TextureLineText, FString TexturePath,
-	                     ECastMaterialType MaterialType, const FString& ImageFormat);
+	                     const FString& ImageFormat);
 	bool ImportTexture(FCastTextureInfo& Texture, const FString& FilePath, const FString& ParentPath, bool bSRGB);
 	UMaterialInterface* CreateMaterialInstance(const FCastMaterialInfo& Material, const UObject* ParentPackage);
 

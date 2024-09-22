@@ -156,7 +156,6 @@ UObject* UCastAssetFactory::FactoryCreateFile(
 					CastImporter->AnalysisMaterial(FPaths::GetPath(InParent->GetPathName()),
 					                               FilePath,
 					                               ImportOptions->GlobalMaterialPath,
-					                               ImportOptions->MaterialType,
 					                               ImportOptions->TextureFormat);
 				}
 				else
@@ -164,7 +163,6 @@ UObject* UCastAssetFactory::FactoryCreateFile(
 					CastImporter->AnalysisMaterial(FPaths::GetPath(InParent->GetPathName()),
 					                               FilePath,
 					                               FPaths::Combine(FilePath, TEXT("_images")),
-					                               ImportOptions->MaterialType,
 					                               ImportOptions->TextureFormat);
 				}
 			}

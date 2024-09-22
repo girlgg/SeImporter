@@ -26,9 +26,13 @@ You can use **AddRefPosToAnimations** to convert relative animations into absolu
 
 When exporting from Blender to FBX, please ensure the root bone is named **Armature**.
 
-支持自动识别并导入材质和贴图（当前仅支持iw9引擎，游戏版本19-21均为该引擎）
+支持自动识别并导入材质和贴图
 
-The plugin supports automatic detection and import of materials and textures (currently only for the iw9 engine, which is used in game versions 19-21).
+The plugin supports automatic detection and import of materials and textures.
+
+当前支持iw9引擎（游戏版本19-21），iw8引擎（游戏版本16-18）
+
+Currently supports IW9 engine (game versions 19-21) and IW8 engine (game versions 16-18).
 
 插件只支持UE5.4.4及以上版本。由于UE的资产特性，如果你使用以下版本，材质将不会被自动创建，但贴图仍然会被导入
 

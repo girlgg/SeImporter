@@ -13,9 +13,10 @@ enum ECastImportType : int8
 };
 
 UENUM(BlueprintType)
-enum ECastMaterialType : int8
+enum ECastEngineType : int8
 {
-	CastMT_IW9 UMETA(DisplayName="IW9 Engine Material")
+	CastMT_IW9 UMETA(DisplayName="IW9 Engine"),
+	CastMT_IW8 UMETA(DisplayName="IW8 Engine")
 };
 
 UENUM(BlueprintType)
@@ -33,6 +34,9 @@ class UCastImportUI : public UObject
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
+	TEnumAsByte<ECastEngineType> EngineType{CastMT_IW9};
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Mesh, meta=(ImportType="SkeletalMesh|SkeletalMesh"))
 	TObjectPtr<class USkeleton> Skeleton{nullptr};
 
@@ -67,9 +71,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
 		meta=(ImportType="GeoOnly", EditCondition="bUseGlobalMaterialsPath"))
 	FString GlobalMaterialPath;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
-	TEnumAsByte<ECastMaterialType> MaterialType;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
 	FString TextureFormat{"png"};

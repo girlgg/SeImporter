@@ -234,7 +234,7 @@ bool FCastImporter::ImportFromFile(FString Filename)
 }
 
 void FCastImporter::AnalysisMaterial(FString ParentPath, FString MaterialPath, FString TexturePath,
-                                     ECastMaterialType MaterialType, FString TextureFormat)
+                                     FString TextureFormat)
 {
 	TArray<FCastRoot>& Roots = CastManager->Scene->Roots;
 	for (FCastRoot& Root : Roots)
@@ -254,7 +254,6 @@ void FCastImporter::AnalysisMaterial(FString ParentPath, FString MaterialPath, F
 							                ParentPath,
 							                MaterialTextContent[LineIndex],
 							                FPaths::Combine(TexturePath, Material.Name),
-							                MaterialType,
 							                TextureFormat))
 						{
 							Material.Textures.Add(CodTexture);
@@ -267,9 +266,9 @@ void FCastImporter::AnalysisMaterial(FString ParentPath, FString MaterialPath, F
 }
 
 bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPath, FString TextureLineText,
-                                    FString TexturePath, ECastMaterialType MaterialType, const FString& ImageFormat)
+                                    FString TexturePath, const FString& ImageFormat)
 {
-	if (MaterialType == CastMT_IW9)
+	if (ImportOptions->EngineType == CastMT_IW9)
 	{
 		TArray<FString> LineParts;
 		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
@@ -321,6 +320,27 @@ bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPat
 			Texture.TextureSlot = "Mask";
 			Texture.TextureType = "Mask";
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+		}
+	}
+	else if (ImportOptions->EngineType == CastMT_IW8)
+	{
+		TArray<FString> LineParts;
+		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
+		FString TextureAddress = LineParts[0];
+		FString TextureName = LineParts[1];
+		Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
+		Texture.TextureName = TextureName;
+		// Texture.TextureType = TEXT("Normal");
+
+		if (TextureAddress == "unk_semantic_0x0")
+		{
+			Texture.TextureSlot = "Albedo";
+			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+		}
+		if (TextureAddress == "unk_semantic_0x9")
+		{
+			Texture.TextureSlot = "Normal";
+			return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
 		}
 	}
 	return false;
@@ -390,14 +410,22 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 
 	const auto MaterialInstanceFactory = NewObject<UMaterialInstanceConstantFactoryNew>();
 
-	FString MaterialPath = "/SeImporter/BaseMaterials/BaseMat.BaseMat";
-	if (MaterialType == TEXT("Alpha"))
+	FString MaterialPath;
+	if (ImportOptions->EngineType == CastMT_IW9)
 	{
-		MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlpha.BaseMatWithAlpha";
+		MaterialPath = "/SeImporter/BaseMaterials/BaseMat.BaseMat";
+		if (MaterialType == TEXT("Alpha"))
+		{
+			MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlpha.BaseMatWithAlpha";
+		}
+		else if (MaterialType == TEXT("Mask"))
+		{
+			MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlphaMask.BaseMatWithAlphaMask";
+		}
 	}
-	else if (MaterialType == TEXT("Mask"))
+	else if (ImportOptions->EngineType == CastMT_IW8)
 	{
-		MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlphaMask.BaseMatWithAlphaMask";
+		MaterialPath = "/SeImporter/BaseMaterials/BaseMat_IW8.BaseMat_IW8";
 	}
 
 	MaterialInstanceFactory->InitialParent =
@@ -423,15 +451,14 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 			if (!Texture.TextureObject) { continue; }
 			UTexture* TextureAsset = Cast<UTexture>(Texture.TextureObject);
 			FString& TextureType = Texture.TextureType;
-			if (TextureAsset && !TextureType.IsEmpty())
+			if (TextureAsset && !Texture.TextureSlot.IsEmpty())
 			{
 				for (auto& SwitchParam : StaticParameters.StaticSwitchParameters)
 				{
 					SwitchParam.bOverride = true;
 					SwitchParam.Value = true;
 				}
-				TextureType = Texture.TextureSlot;
-				FMaterialParameterInfo TextureParameterInfo(*TextureType, GlobalParameter, -1);
+				FMaterialParameterInfo TextureParameterInfo(*Texture.TextureSlot, GlobalParameter, -1);
 				MaterialInstance->SetTextureParameterValueEditorOnly(TextureParameterInfo, TextureAsset);
 			}
 		}
@@ -558,11 +585,11 @@ FCastImportOptions* FCastImporter::GetImportOptions(
 		ImportOptions->bUseGlobalMaterialsPath = ImportUI->bUseGlobalMaterialsPath;
 		ImportOptions->GlobalMaterialPath = ImportUI->GlobalMaterialPath;
 		ImportOptions->TextureFormat = ImportUI->TextureFormat;
-		ImportOptions->MaterialType = ImportUI->MaterialType;
 		ImportOptions->bImportAsSkeletal = ImportUI->bImportAsSkeletal;
 		ImportOptions->bImportMesh = ImportUI->bImportMesh;
 		ImportOptions->bImportAnimations = ImportUI->bImportAnimations;
 		ImportOptions->AnimImportType = ImportUI->AnimImportType;
+		ImportOptions->EngineType = ImportUI->EngineType;
 
 		if (CastOptionWindow->ShouldImport())
 		{
@@ -662,6 +689,16 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 		Data.NumTexCoords = 2;
 		// 面 和 材质
 		int32 VertexOffset = 0;
+		TArray<int32> VertexOrder;
+		if (ImportOptions->EngineType == CastMT_IW9)
+		{
+			VertexOrder = {0, 1, 2};
+		}
+		else if (ImportOptions->EngineType == CastMT_IW8)
+		{
+			VertexOrder = {2, 1, 0};
+		}
+		TMap<uint32, int32> DataMatMap;
 		for (FCastRoot& Root : CastManager->Scene->Roots)
 		{
 			for (FCastModelInfo& Model : Root.Models)
@@ -669,25 +706,39 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 				for (FCastMeshInfo& Mesh : Model.Meshes)
 				{
 					uint32 ModelMatIdx = *Model.MaterialMap.Find(Mesh.MaterialHash);
-					const FCastMaterialInfo& Material = Model.Materials[ModelMatIdx];
-					SkeletalMeshImportData::FMaterial NewMaterial;
-					NewMaterial.MaterialImportName = Material.Name;
-					if (Material.Textures.Num() > 0)
-						NewMaterial.Material =
-							CreateMaterialInstance(Material, ImportSkeletalMeshArgs.InParent);
-					int32 MatIdx = Data.Materials.Add(NewMaterial);
+					int32 MatIdx;
+					if (int32* FindRes = DataMatMap.Find(ModelMatIdx))
+					{
+						MatIdx = *FindRes;
+					}
+					else
+					{
+						const FCastMaterialInfo& Material = Model.Materials[ModelMatIdx];
+						SkeletalMeshImportData::FMaterial NewMaterial;
+						NewMaterial.MaterialImportName = Material.Name;
+						if (Material.Textures.Num() > 0)
+						{
+							NewMaterial.Material =
+								CreateMaterialInstance(Material, ImportSkeletalMeshArgs.InParent);
+						}
+						MatIdx = Data.Materials.Add(NewMaterial);
+						DataMatMap.Add(ModelMatIdx, MatIdx);
+					}
 
 					const int32 MeshFaceCnt = Mesh.Faces.Num() / 3;
 					for (int32 FaceID = 0; FaceID < MeshFaceCnt; ++FaceID)
 					{
 						SkeletalMeshImportData::FTriangle& Triangle = Data.Faces.AddZeroed_GetRef();
 						Triangle.SmoothingGroups = 255;
+						uint32 TriangleVertexID[3] = {
+							Mesh.Faces[FaceID * 3], Mesh.Faces[FaceID * 3 + 1], Mesh.Faces[FaceID * 3 + 2]
+						};
 						for (int32 FaceVertexID = 0; FaceVertexID < 3; ++FaceVertexID)
 						{
 							int32 WedgesID = Data.Wedges.AddUninitialized();
 							SkeletalMeshImportData::FVertex& Wedges = Data.Wedges[WedgesID];
 
-							const int32 MeshVertexID = Mesh.Faces[FaceID * 3 + FaceVertexID];
+							const int32 MeshVertexID = TriangleVertexID[VertexOrder[FaceVertexID]];
 							Wedges.MatIndex = MatIdx;
 							Wedges.VertexIndex = MeshVertexID + VertexOffset;
 							Wedges.Color = FColor((Mesh.VertexColor[MeshVertexID] >> 0) & 0xFF,
@@ -697,7 +748,11 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 							Wedges.UVs[0] = FVector2f(Mesh.VertexUV[MeshVertexID].X, Mesh.VertexUV[MeshVertexID].Y);
 							Wedges.Reserved = 0;
 
-							Triangle.TangentZ[FaceVertexID] = Mesh.VertexNormals[MeshVertexID];
+							Triangle.TangentZ[FaceVertexID] = FVector3f{
+								Mesh.VertexNormals[MeshVertexID].X,
+								-Mesh.VertexNormals[MeshVertexID].Y,
+								Mesh.VertexNormals[MeshVertexID].Z
+							};
 							Triangle.TangentZ->Normalize();
 							Triangle.WedgeIndex[FaceVertexID] = WedgesID;
 						}
@@ -735,7 +790,7 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 	}
 
 	FSkeletalMeshBuildSettings BuildOptions;
-	//Make sure the build option change in the re-import ui is reconduct
+
 	BuildOptions.bUseFullPrecisionUVs = false;
 	BuildOptions.bUseBackwardsCompatibleF16TruncUVs = false;
 	BuildOptions.bUseHighPrecisionTangentBasis = false;
@@ -744,6 +799,10 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 	BuildOptions.bUseMikkTSpace = false;
 	BuildOptions.bComputeWeightedNormals = false;
 	BuildOptions.bRemoveDegenerates = false;
+	BuildOptions.ThresholdPosition = false;
+	BuildOptions.ThresholdTangentNormal = false;
+	BuildOptions.ThresholdUV = false;
+	BuildOptions.MorphThresholdPosition = false;
 
 	SkeletalMesh->PreEditChange(nullptr);
 	SkeletalMesh->InvalidateDeriveDataCacheGUID();
@@ -776,7 +835,6 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 			RefSkelModifier.Add(BoneInfo, BoneTransform);
 		}
 	}
-	// TODO 标准化权重
 
 	SkeletalMesh->ResetLODInfo();
 	FSkeletalMeshLODInfo& NewLODInfo = SkeletalMesh->AddLODInfo();
@@ -784,6 +842,8 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 	NewLODInfo.ReductionSettings.NumOfVertPercentage = 1.0f;
 	NewLODInfo.ReductionSettings.MaxDeviationPercentage = 0.0f;
 	NewLODInfo.LODHysteresis = 0.02f;
+
+	Data.bHasNormals = true;
 
 	PRAGMA_DISABLE_DEPRECATION_WARNINGS
 	SkeletalMesh->SaveLODImportedData(0, Data);
