@@ -1,5 +1,6 @@
 ﻿#include "Factories/CastAssetFactory.h"
 
+#include "Misc/ScopedSlowTask.h"
 #include "EditorReimportHandler.h"
 #include "Widgets/CastImportUI.h"
 #include "SeLogChannels.h"

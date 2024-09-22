@@ -28,7 +28,7 @@ struct FCastNotificationTrackInfo
 struct FCastAnimationInfo
 {
 	FString Name{""};
-	float Framerate{24};
+	float Framerate{30};
 	bool Looping{false};
 
 	TArray<FCastCurveInfo> Curves;

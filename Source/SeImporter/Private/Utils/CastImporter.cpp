@@ -562,7 +562,7 @@ FCastImportOptions* FCastImporter::GetImportOptions(
 		ImportOptions->bImportAsSkeletal = ImportUI->bImportAsSkeletal;
 		ImportOptions->bImportMesh = ImportUI->bImportMesh;
 		ImportOptions->bImportAnimations = ImportUI->bImportAnimations;
-		ImportOptions->bAddRefPosToAnimations = ImportUI->bAddRefPosToAnimations;
+		ImportOptions->AnimImportType = ImportUI->AnimImportType;
 
 		if (CastOptionWindow->ShouldImport())
 		{
@@ -639,25 +639,6 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 				}
 			}
 		}
-		// 处理材质
-		for (FCastRoot& Root : CastManager->Scene->Roots)
-		{
-			for (FCastModelInfo& Model : Root.Models)
-			{
-				for (FCastMaterialInfo& Material : Model.Materials)
-				{
-					SkeletalMeshImportData::FMaterial NewMaterial;
-					NewMaterial.MaterialImportName = Material.Name;
-
-					if (Material.Textures.Num() > 0)
-					{
-						NewMaterial.Material = CreateMaterialInstance(Material, ImportSkeletalMeshArgs.InParent);
-					}
-
-					Data.Materials.Add(NewMaterial);
-				}
-			}
-		}
 		// 顶点
 		Data.Points.Empty();
 		for (FCastRoot& Root : CastManager->Scene->Roots)
@@ -675,11 +656,11 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 				}
 			}
 		}
+
 		// 一般是两个UV层，第一个是正常UV，第二个是光照贴图
 		// 可以支持更多UV层，暂时还没发现这样的cast文件
 		Data.NumTexCoords = 2;
-		// 面
-		int32 MeshCnt = 0;
+		// 面 和 材质
 		int32 VertexOffset = 0;
 		for (FCastRoot& Root : CastManager->Scene->Roots)
 		{
@@ -687,6 +668,15 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 			{
 				for (FCastMeshInfo& Mesh : Model.Meshes)
 				{
+					uint32 ModelMatIdx = *Model.MaterialMap.Find(Mesh.MaterialHash);
+					const FCastMaterialInfo& Material = Model.Materials[ModelMatIdx];
+					SkeletalMeshImportData::FMaterial NewMaterial;
+					NewMaterial.MaterialImportName = Material.Name;
+					if (Material.Textures.Num() > 0)
+						NewMaterial.Material =
+							CreateMaterialInstance(Material, ImportSkeletalMeshArgs.InParent);
+					int32 MatIdx = Data.Materials.Add(NewMaterial);
+
 					const int32 MeshFaceCnt = Mesh.Faces.Num() / 3;
 					for (int32 FaceID = 0; FaceID < MeshFaceCnt; ++FaceID)
 					{
@@ -698,23 +688,22 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 							SkeletalMeshImportData::FVertex& Wedges = Data.Wedges[WedgesID];
 
 							const int32 MeshVertexID = Mesh.Faces[FaceID * 3 + FaceVertexID];
-							Wedges.MatIndex = MeshCnt;
+							Wedges.MatIndex = MatIdx;
 							Wedges.VertexIndex = MeshVertexID + VertexOffset;
 							Wedges.Color = FColor((Mesh.VertexColor[MeshVertexID] >> 0) & 0xFF,
 							                      (Mesh.VertexColor[MeshVertexID] >> 8) & 0xFF,
 							                      (Mesh.VertexColor[MeshVertexID] >> 16) & 0xFF,
 							                      (Mesh.VertexColor[MeshVertexID] >> 24) & 0xFF);
-							Wedges.UVs[0] = Mesh.VertexUV[MeshVertexID];
+							Wedges.UVs[0] = FVector2f(Mesh.VertexUV[MeshVertexID].X, Mesh.VertexUV[MeshVertexID].Y);
 							Wedges.Reserved = 0;
 
 							Triangle.TangentZ[FaceVertexID] = Mesh.VertexNormals[MeshVertexID];
 							Triangle.TangentZ->Normalize();
 							Triangle.WedgeIndex[FaceVertexID] = WedgesID;
 						}
-						Triangle.MatIndex = MeshCnt;
+						Triangle.MatIndex = MatIdx;
 					}
 					VertexOffset += Mesh.VertexPositions.Num();
-					++MeshCnt;
 				}
 			}
 		}
@@ -1101,7 +1090,7 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 	Controller.InitializeModel();
 	Controller.OpenBracket(LOCTEXT("ImportAnimation_Bracket", "Importing Animation"), false);
 	Controller.RemoveAllBoneTracks(false);
-	Controller.SetFrameRate(FFrameRate(Animation.Framerate ? Animation.Framerate : 24, 1), false);
+	Controller.SetFrameRate(FFrameRate(Animation.Framerate ? Animation.Framerate : 30, 1), false);
 
 	uint32 NumberOfFrames = 0;
 	for (FCastCurveInfo& Curve : Animation.Curves)
@@ -1119,15 +1108,17 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 		TArray<float> ScaleX;
 		TArray<float> ScaleY;
 		TArray<float> ScaleZ;
-
-		FString Mode;
 	};
 	TMap<FString, BoneCurve> BoneMap;
 
+	ECastAnimImportType AnimMode = CastAIT_Absolutely;
 	for (FCastCurveInfo& Curve : Animation.Curves)
 	{
 		BoneCurve& BoneCurveInfo = BoneMap.FindOrAdd(Curve.NodeName);
-		BoneCurveInfo.Mode = Curve.Mode;
+		if (Curve.Mode != "absolute")
+		{
+			AnimMode = CastAIT_Relative;
+		}
 		if (Curve.KeyPropertyName == "tx")
 		{
 			InterpolateAnimationKeyframes(BoneCurveInfo.PositionX, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
@@ -1160,11 +1151,19 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 
 	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
 
+	if (!((ImportOptions->AnimImportType == CastAIT_Auto && AnimMode == CastAIT_Absolutely) ||
+		ImportOptions->AnimImportType == CastAIT_Absolutely))
+	{
+		const TArray<FName>& BoneNames = RefSkeleton.GetRawRefBoneNames();
+		for (FName BoneName : BoneNames)
+		{
+			Controller.AddBoneCurve(BoneName, false);
+		}
+	}
+
 	for (auto BoneTransformKeys : BoneMap)
 	{
 		FName NewCurveName(BoneTransformKeys.Key);
-
-		FString Mode = BoneTransformKeys.Value.Mode;
 
 		TArray<FVector3f> PositionalKeys;
 		TArray<FQuat4f> RotationalKeys;
@@ -1184,7 +1183,8 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 		// 设置位置关键帧
 		for (int32 i = 0; i < BoneTransformKeys.Value.PositionX.Num(); ++i)
 		{
-			if (ImportOptions->bAddRefPosToAnimations)
+			if (AnimMode != CastAIT_Absolutely &&
+				ImportOptions->AnimImportType == CastAIT_Absolutely)
 			{
 				PositionalKeys.Add({
 					BoneTransformKeys.Value.PositionX[i] + (float)BoneLocation.X,
@@ -1201,10 +1201,19 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 				});
 			}
 		}
+
 		if (PositionalKeys.IsEmpty())
-			PositionalKeys.Add({
-				(float)BoneLocation.X, (float)BoneLocation.Y, (float)BoneLocation.Z
-			});
+		{
+			if (AnimMode != CastAIT_Absolutely &&
+				ImportOptions->AnimImportType == CastAIT_Absolutely)
+			{
+				PositionalKeys.Add({(float)BoneLocation.X, (float)BoneLocation.Y, (float)BoneLocation.Z});
+			}
+			else
+			{
+				PositionalKeys.AddZeroed();
+			}
+		}
 		FVector3f LastPos = PositionalKeys.Last();
 		while (PositionalKeys.Num() < (int32)NumberOfFrames) PositionalKeys.Add(LastPos);
 		// 设置旋转关键帧

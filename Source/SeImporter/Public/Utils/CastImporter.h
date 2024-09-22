@@ -56,7 +56,7 @@ struct FCastImportOptions
 	bool bImportAsSkeletal;
 	bool bImportMesh;
 	bool bImportAnimations;
-	bool bAddRefPosToAnimations;
+	ECastAnimImportType AnimImportType;
 };
 
 struct FCastMaterial

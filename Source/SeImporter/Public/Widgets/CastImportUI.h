@@ -18,6 +18,14 @@ enum ECastMaterialType : int8
 	CastMT_IW9 UMETA(DisplayName="IW9 Engine Material")
 };
 
+UENUM(BlueprintType)
+enum ECastAnimImportType : uint8
+{
+	CastAIT_Auto UMETA(DisplayName="Automatically detect"),
+	CastAIT_Absolutely UMETA(DisplayName="Force as absolute"),
+	CastAIT_Relative UMETA(DisplayName="Force as relative")
+};
+
 UCLASS(BlueprintType, config=EditorPerProjectUserSettings, AutoExpandCategories=(FTransform), HideCategories=Object,
 	MinimalAPI)
 class UCastImportUI : public UObject
@@ -46,8 +54,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation"))
 	bool bImportAnimations{true};
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation"))
-	bool bAddRefPosToAnimations{false};
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
+	TEnumAsByte<ECastAnimImportType> AnimImportType{CastAIT_Auto};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
 	bool bMaterials{true};
