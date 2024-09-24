@@ -590,6 +590,7 @@ FCastImportOptions* FCastImporter::GetImportOptions(
 		ImportOptions->bImportAnimations = ImportUI->bImportAnimations;
 		ImportOptions->AnimImportType = ImportUI->AnimImportType;
 		ImportOptions->EngineType = ImportUI->EngineType;
+		ImportOptions->bImportAnimationNotify = ImportUI->bImportAnimationNotify;
 
 		if (CastOptionWindow->ShouldImport())
 		{
@@ -1150,7 +1151,8 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 	Controller.InitializeModel();
 	Controller.OpenBracket(LOCTEXT("ImportAnimation_Bracket", "Importing Animation"), false);
 	Controller.RemoveAllBoneTracks(false);
-	Controller.SetFrameRate(FFrameRate(Animation.Framerate ? Animation.Framerate : 30, 1), false);
+	float AnimationRate = Animation.Framerate ? Animation.Framerate : 30;
+	Controller.SetFrameRate(FFrameRate(AnimationRate, 1), false);
 
 	uint32 NumberOfFrames = 0;
 	for (FCastCurveInfo& Curve : Animation.Curves)
@@ -1312,6 +1314,21 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 			Controller.AddBoneCurve(NewCurveName, false);
 		}
 		Controller.SetBoneTrackKeys(NewCurveName, PositionalKeys, RotationalKeys, ScalingKeys);
+	}
+
+	// 动画通知
+	if (!Animation.NotificationTracks.IsEmpty() && ImportOptions->bImportAnimationNotify)
+	{
+		for (FCastNotificationTrackInfo& NotificationTrack : Animation.NotificationTracks)
+		{
+			for (uint32& KeyFrame : NotificationTrack.KeyFrameBuffer)
+			{
+				FAnimNotifyEvent NotifyEvent;
+				NotifyEvent.NotifyName = *NotificationTrack.Name;
+				NotifyEvent.SetTime(KeyFrame / AnimationRate);
+				DestSeq->Notifies.Add(NotifyEvent);
+			}
+		}
 	}
 
 	Controller.NotifyPopulated();

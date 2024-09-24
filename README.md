@@ -18,10 +18,6 @@ It is recommended to use Cast for importing instead of SEModel and SEAnim format
 - 相对动画，导入后需要在动画蓝图使用转换插件，将它变为正常动画：[girlgg/SeAnimModule: Convert Refpose to Normal Pose (github.com)](https://github.com/girlgg/SeAnimModule)。相对动画结合这款插件，即可实现动画的叠加（主要用于第一人称动画）：https://github.com/dest1yo/MDA
 - **Relative animations**: After importing, you'll need to use a conversion plugin in the animation blueprint to turn it into a normal animation: [girlgg/SeAnimModule: Convert Refpose to Normal Pose (github.com)](https://github.com/girlgg/SeAnimModule). With this plugin, you can combine relative animations for layered animation effects (primarily used for first-person animations): https://github.com/dest1yo/MDA
 
-你可以使用AddRefPosToAnimations选项，使用本插件在导入动画时将相对动画转为绝对动画
-
-You can use **AddRefPosToAnimations** to convert relative animations into absolute animations during import with this plugin.
-
 使用blender导出为FBX时，请注意根骨骼名字必须是**Armature**
 
 When exporting from Blender to FBX, please ensure the root bone is named **Armature**.

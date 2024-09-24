@@ -20,7 +20,7 @@ public:
 
 	void Destroy();
 
-	FCastScene* Scene{nullptr};
+	TUniquePtr<FCastScene> Scene{nullptr};
 
 	int32 GetBoneNum() const;
 	int32 GetVertexNum() const;

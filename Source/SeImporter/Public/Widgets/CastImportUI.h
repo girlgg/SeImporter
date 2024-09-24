@@ -59,6 +59,9 @@ public:
 	bool bImportAnimations{true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
+	bool bImportAnimationNotify{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
 	TEnumAsByte<ECastAnimImportType> AnimImportType{CastAIT_Auto};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))

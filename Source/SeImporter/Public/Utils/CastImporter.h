@@ -54,6 +54,7 @@ struct FCastImportOptions
 	bool bImportAsSkeletal;
 	bool bImportMesh;
 	bool bImportAnimations;
+	bool bImportAnimationNotify{true};
 	ECastAnimImportType AnimImportType;
 	ECastEngineType EngineType;
 };

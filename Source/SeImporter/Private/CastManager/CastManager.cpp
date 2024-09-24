@@ -26,7 +26,7 @@ bool FCastManager::Initialize(FString InFilePath)
 
 bool FCastManager::Import()
 {
-	Scene = new FCastScene();
+	Scene = MakeUnique<FCastScene>();
 	if (!Scene) return false;
 
 	auto& [Magic, Version, RootNodes, Flags] = Scene->Header;
@@ -55,7 +55,11 @@ void FCastManager::Destroy()
 {
 	if (bWasDestroy) return;
 	bWasDestroy = true;
-	if (Scene) delete Scene;
+	if (Scene.IsValid())
+	{
+		Scene.Reset();
+		Scene = nullptr;
+	}
 	if (Reader.IsValid()) Reader.Reset();
 }
 
@@ -694,7 +698,7 @@ void FCastManager::ProcessAnimationData(FCastNode& Node, FCastAnimationInfo& Ani
 	case 0x76727563: // Curve
 		{
 			FCastCurveInfo Curve;
-			for (auto Property : Node.Properties)
+			for (FCastNodeProperty& Property : Node.Properties)
 			{
 				if (Property.PropertyName == "nn")
 				{
@@ -776,12 +780,20 @@ void FCastManager::ProcessAnimationData(FCastNode& Node, FCastAnimationInfo& Ani
 	case 0x6669746E: // NotificationTrack
 		{
 			FCastNotificationTrackInfo NotificationTrack;
-			for (auto Property : Node.Properties)
+			NotificationTrack.KeyFrameBuffer.Empty();
+			for (FCastNodeProperty& Property : Node.Properties)
 			{
-				NotificationTrack.KeyFrameBuffer.Empty();
 				if (Property.PropertyName == "n")
 					NotificationTrack.Name = Property.StringData;
 				else if (Property.PropertyName == "kb")
+					if (Property.DataType == ECastPropertyId::Integer32)
+						for (const auto& Val : Property.IntArray)
+							NotificationTrack.KeyFrameBuffer.Add(Val);
+				// COPY_ARR(Property.IntArray, NotificationTrack.KeyFrameBuffer)
+				if (Property.DataType == ECastPropertyId::Short)
+					// for (const auto& Val : src_arr) dst_arr.Add(Val)
+					COPY_ARR(Property.ShortArray, NotificationTrack.KeyFrameBuffer)
+				if (Property.DataType == ECastPropertyId::Byte)
 					COPY_ARR(Property.ByteArray, NotificationTrack.KeyFrameBuffer)
 			}
 			Animation.NotificationTracks.Add(NotificationTrack);
