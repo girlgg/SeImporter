@@ -591,6 +591,7 @@ FCastImportOptions* FCastImporter::GetImportOptions(
 		ImportOptions->AnimImportType = ImportUI->AnimImportType;
 		ImportOptions->EngineType = ImportUI->EngineType;
 		ImportOptions->bImportAnimationNotify = ImportUI->bImportAnimationNotify;
+		ImportOptions->bDeleteRootNodeAnim = ImportUI->bDeleteRootNodeAnim;
 
 		if (CastOptionWindow->ShouldImport())
 		{
@@ -885,8 +886,8 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 	SkeletalMesh->GetAssetImportData()->AddFileName(UFactory::GetCurrentFilename(), 0,
 	                                                NSSkeletalMeshSourceFileLabels::GeoAndSkinningText().ToString());
 	SkeletalMesh->CalculateInvRefMatrices();
-	if (!SkeletalMesh->GetResourceForRendering() || !SkeletalMesh->GetResourceForRendering()->LODRenderData.
-	                                                               IsValidIndex(0))
+	if (!SkeletalMesh->GetResourceForRendering()
+		|| !SkeletalMesh->GetResourceForRendering()->LODRenderData.IsValidIndex(0))
 	{
 		SkeletalMesh->Build();
 	}
@@ -1173,9 +1174,15 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 	};
 	TMap<FString, BoneCurve> BoneMap;
 
+	FName RootName = Skeleton->GetReferenceSkeleton().GetBoneName(0);
+
 	ECastAnimImportType AnimMode = CastAIT_Absolutely;
 	for (FCastCurveInfo& Curve : Animation.Curves)
 	{
+		if (ImportOptions->bDeleteRootNodeAnim && Curve.NodeName == RootName)
+		{
+			continue;
+		}
 		BoneCurve& BoneCurveInfo = BoneMap.FindOrAdd(Curve.NodeName);
 		if (Curve.Mode != "absolute")
 		{
