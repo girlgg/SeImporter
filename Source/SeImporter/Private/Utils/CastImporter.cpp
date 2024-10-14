@@ -268,7 +268,7 @@ void FCastImporter::AnalysisMaterial(FString ParentPath, FString MaterialPath, F
 bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPath, FString TextureLineText,
                                     FString TexturePath, const FString& ImageFormat)
 {
-	if (ImportOptions->EngineType == CastMT_IW9)
+	if (ImportOptions->MaterialType == CastMT_IW9)
 	{
 		TArray<FString> LineParts;
 		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
@@ -322,7 +322,7 @@ bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPat
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
 		}
 	}
-	else if (ImportOptions->EngineType == CastMT_IW8)
+	else if (ImportOptions->MaterialType == CastMT_IW8)
 	{
 		TArray<FString> LineParts;
 		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
@@ -411,7 +411,7 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 	const auto MaterialInstanceFactory = NewObject<UMaterialInstanceConstantFactoryNew>();
 
 	FString MaterialPath;
-	if (ImportOptions->EngineType == CastMT_IW9)
+	if (ImportOptions->MaterialType == CastMT_IW9)
 	{
 		MaterialPath = "/SeImporter/BaseMaterials/BaseMat.BaseMat";
 		if (MaterialType == TEXT("Alpha"))
@@ -423,7 +423,7 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 			MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlphaMask.BaseMatWithAlphaMask";
 		}
 	}
-	else if (ImportOptions->EngineType == CastMT_IW8)
+	else if (ImportOptions->MaterialType == CastMT_IW8)
 	{
 		MaterialPath = "/SeImporter/BaseMaterials/BaseMat_IW8.BaseMat_IW8";
 	}
@@ -589,9 +589,10 @@ FCastImportOptions* FCastImporter::GetImportOptions(
 		ImportOptions->bImportMesh = ImportUI->bImportMesh;
 		ImportOptions->bImportAnimations = ImportUI->bImportAnimations;
 		ImportOptions->AnimImportType = ImportUI->AnimImportType;
-		ImportOptions->EngineType = ImportUI->EngineType;
+		ImportOptions->bReverseFace = ImportUI->bReverseFace;
 		ImportOptions->bImportAnimationNotify = ImportUI->bImportAnimationNotify;
 		ImportOptions->bDeleteRootNodeAnim = ImportUI->bDeleteRootNodeAnim;
+		ImportOptions->MaterialType = ImportUI->MaterialType;
 
 		if (CastOptionWindow->ShouldImport())
 		{
@@ -691,12 +692,8 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 		Data.NumTexCoords = 2;
 		// 面 和 材质
 		int32 VertexOffset = 0;
-		TArray<int32> VertexOrder;
-		if (ImportOptions->EngineType == CastMT_IW9)
-		{
-			VertexOrder = {0, 1, 2};
-		}
-		else if (ImportOptions->EngineType == CastMT_IW8)
+		TArray<int32> VertexOrder = {0, 1, 2};
+		if (ImportOptions->bReverseFace)
 		{
 			VertexOrder = {2, 1, 0};
 		}

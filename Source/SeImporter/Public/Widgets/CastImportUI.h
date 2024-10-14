@@ -13,7 +13,7 @@ enum ECastImportType : int8
 };
 
 UENUM(BlueprintType)
-enum ECastEngineType : int8
+enum EMaterialType : int8
 {
 	CastMT_IW9 UMETA(DisplayName="IW9 Engine"),
 	CastMT_IW8 UMETA(DisplayName="IW8 Engine")
@@ -33,10 +33,7 @@ class UCastImportUI : public UObject
 {
 	GENERATED_BODY()
 
-public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
-	TEnumAsByte<ECastEngineType> EngineType{CastMT_IW9};
-	
+public:	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Mesh, meta=(ImportType="SkeletalMesh|SkeletalMesh"))
 	TObjectPtr<class USkeleton> Skeleton{nullptr};
 
@@ -46,6 +43,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Mesh, meta=(ImportType="SkeletalMesh"))
 	bool bImportMesh{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category=Mesh, meta=(ImportType="SkeletalMesh", EditCondition="bImportMesh"))
+	bool bReverseFace{false};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AdvancedDisplay, config, Category=Mesh,
 		meta=(ImportType="SkeletalMesh"))
@@ -69,6 +69,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
 	bool bMaterials{true};
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly", EditCondition="bMaterials"))
+	TEnumAsByte<EMaterialType> MaterialType{CastMT_IW9};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
 		meta=(ImportType="GeoOnly", EditCondition="bMaterials"))

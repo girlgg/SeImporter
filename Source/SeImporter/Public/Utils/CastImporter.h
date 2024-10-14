@@ -56,8 +56,9 @@ struct FCastImportOptions
 	bool bImportAnimations;
 	bool bImportAnimationNotify;
 	bool bDeleteRootNodeAnim;
+	bool bReverseFace;
 	ECastAnimImportType AnimImportType;
-	ECastEngineType EngineType;
+	EMaterialType MaterialType;
 };
 
 struct FCastMaterial
