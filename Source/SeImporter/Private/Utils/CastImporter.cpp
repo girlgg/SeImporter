@@ -282,12 +282,12 @@ bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPat
 		{
 			return false;
 		}
-		if (TextureAddress == "unk_semantic_0x0")
+		if (TextureAddress == "unk_semantic_0x0" || TextureAddress == "unk_semantic_0x55")
 		{
 			Texture.TextureSlot = "Albedo";
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
 		}
-		if (TextureAddress == "unk_semantic_0x4")
+		if (TextureAddress == "unk_semantic_0x4" || TextureAddress == "unk_semantic_0x56")
 		{
 			Texture.TextureSlot = "NOG";
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
@@ -588,7 +588,8 @@ FCastImportOptions* FCastImporter::GetImportOptions(
 		ImportOptions->bImportAsSkeletal = ImportUI->bImportAsSkeletal;
 		ImportOptions->bImportMesh = ImportUI->bImportMesh;
 		ImportOptions->bImportAnimations = ImportUI->bImportAnimations;
-		ImportOptions->AnimImportType = ImportUI->AnimImportType;
+		ImportOptions->bConvertRefPosition = ImportUI->bConvertRefPosition;
+		ImportOptions->bConvertRefAnim = ImportUI->bConvertRefAnim;
 		ImportOptions->bReverseFace = ImportUI->bReverseFace;
 		ImportOptions->bImportAnimationNotify = ImportUI->bImportAnimationNotify;
 		ImportOptions->bDeleteRootNodeAnim = ImportUI->bDeleteRootNodeAnim;
@@ -1146,35 +1147,60 @@ UObject* FCastImporter::CreateAssetOfClass(UClass* AssetClass, FString ParentPac
 bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq, FCastAnimationInfo& Animation)
 {
 	IAnimationDataController& Controller = DestSeq->GetController();
+	InitializeAnimationController(Controller, Animation);
+
+	TMap<FString, BoneCurve> BoneMap = ExtractCurves(Skeleton, Animation);
+
+	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
+
+	if (!ImportOptions->bConvertRefPosition)
+	{
+		AddBoneCurves(Controller, RefSkeleton);
+	}
+
+	uint32 NumberOfFrames = CalculateNumberOfFrames(Animation);
+
+	PopulateBoneTracks(Controller, BoneMap, RefSkeleton, NumberOfFrames);
+
+	if (!Animation.NotificationTracks.IsEmpty() && ImportOptions->bImportAnimationNotify)
+	{
+		AddAnimationNotifies(DestSeq, Animation, Animation.Framerate);
+	}
+
+	FinalizeController(Controller, DestSeq);
+
+	return true;
+}
+
+void FCastImporter::InitializeAnimationController(IAnimationDataController& Controller,
+                                                  const FCastAnimationInfo& Animation)
+{
 	Controller.InitializeModel();
 	Controller.OpenBracket(LOCTEXT("ImportAnimation_Bracket", "Importing Animation"), false);
 	Controller.RemoveAllBoneTracks(false);
 	float AnimationRate = Animation.Framerate ? Animation.Framerate : 30;
 	Controller.SetFrameRate(FFrameRate(AnimationRate, 1), false);
-
-	uint32 NumberOfFrames = 0;
-	for (FCastCurveInfo& Curve : Animation.Curves)
-		NumberOfFrames = FMath::Max(NumberOfFrames, Curve.KeyFrameBuffer.Last() + 1);
+	uint32 NumberOfFrames = CalculateNumberOfFrames(Animation);
 	Controller.SetNumberOfFrames(FFrameNumber((int32)NumberOfFrames), false);
+}
 
-	struct BoneCurve
+uint32 FCastImporter::CalculateNumberOfFrames(const FCastAnimationInfo& Animation)
+{
+	uint32 NumberOfFrames = 0;
+	for (const FCastCurveInfo& Curve : Animation.Curves)
 	{
-		TArray<float> PositionX;
-		TArray<float> PositionY;
-		TArray<float> PositionZ;
+		NumberOfFrames = FMath::Max(NumberOfFrames, Curve.KeyFrameBuffer.Last() + 1);
+	}
+	return NumberOfFrames;
+}
 
-		TArray<FVector4> Rotation;
-
-		TArray<float> ScaleX;
-		TArray<float> ScaleY;
-		TArray<float> ScaleZ;
-	};
+TMap<FString, FCastImporter::BoneCurve> FCastImporter::ExtractCurves(USkeleton* Skeleton,
+                                                                     const FCastAnimationInfo& Animation)
+{
 	TMap<FString, BoneCurve> BoneMap;
 
 	FName RootName = Skeleton->GetReferenceSkeleton().GetBoneName(0);
-
-	ECastAnimImportType AnimMode = CastAIT_Absolutely;
-	for (FCastCurveInfo& Curve : Animation.Curves)
+	for (const FCastCurveInfo& Curve : Animation.Curves)
 	{
 		if (ImportOptions->bDeleteRootNodeAnim && Curve.NodeName == RootName)
 		{
@@ -1183,54 +1209,60 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 		BoneCurve& BoneCurveInfo = BoneMap.FindOrAdd(Curve.NodeName);
 		if (Curve.Mode != "absolute")
 		{
-			AnimMode = CastAIT_Relative;
+			BoneCurveInfo.AnimMode = CastAIT_Relative;
 		}
-		if (Curve.KeyPropertyName == "tx")
-		{
-			InterpolateAnimationKeyframes(BoneCurveInfo.PositionX, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
-		}
-		else if (Curve.KeyPropertyName == "ty")
-		{
-			InterpolateAnimationKeyframes(BoneCurveInfo.PositionY, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
-		}
-		else if (Curve.KeyPropertyName == "tz")
-		{
-			InterpolateAnimationKeyframes(BoneCurveInfo.PositionZ, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
-		}
-		else if (Curve.KeyPropertyName == "rq")
-		{
-			InterpolateAnimationKeyframes(BoneCurveInfo.Rotation, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
-		}
-		else if (Curve.KeyPropertyName == "sx")
-		{
-			InterpolateAnimationKeyframes(BoneCurveInfo.ScaleX, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
-		}
-		else if (Curve.KeyPropertyName == "sy")
-		{
-			InterpolateAnimationKeyframes(BoneCurveInfo.ScaleY, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
-		}
-		else if (Curve.KeyPropertyName == "sz")
-		{
-			InterpolateAnimationKeyframes(BoneCurveInfo.ScaleZ, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
-		}
+		AssignCurveValues(BoneCurveInfo, Curve);
 	}
+	return BoneMap;
+}
 
-	const FReferenceSkeleton& RefSkeleton = Skeleton->GetReferenceSkeleton();
-
-	if (!((ImportOptions->AnimImportType == CastAIT_Auto && AnimMode == CastAIT_Absolutely) ||
-		ImportOptions->AnimImportType == CastAIT_Absolutely))
+void FCastImporter::AssignCurveValues(BoneCurve& BoneCurveInfo, const FCastCurveInfo& Curve)
+{
+	if (Curve.KeyPropertyName == "tx")
 	{
-		const TArray<FName>& BoneNames = RefSkeleton.GetRawRefBoneNames();
-		for (FName BoneName : BoneNames)
-		{
-			Controller.AddBoneCurve(BoneName, false);
-		}
+		InterpolateAnimationKeyframes(BoneCurveInfo.PositionX, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
 	}
+	else if (Curve.KeyPropertyName == "ty")
+	{
+		InterpolateAnimationKeyframes(BoneCurveInfo.PositionY, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
+	}
+	else if (Curve.KeyPropertyName == "tz")
+	{
+		InterpolateAnimationKeyframes(BoneCurveInfo.PositionZ, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
+	}
+	else if (Curve.KeyPropertyName == "rq")
+	{
+		InterpolateAnimationKeyframes(BoneCurveInfo.Rotation, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
+	}
+	else if (Curve.KeyPropertyName == "sx")
+	{
+		InterpolateAnimationKeyframes(BoneCurveInfo.ScaleX, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
+	}
+	else if (Curve.KeyPropertyName == "sy")
+	{
+		InterpolateAnimationKeyframes(BoneCurveInfo.ScaleY, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
+	}
+	else if (Curve.KeyPropertyName == "sz")
+	{
+		InterpolateAnimationKeyframes(BoneCurveInfo.ScaleZ, Curve.KeyFrameBuffer, Curve.KeyValueBuffer);
+	}
+}
 
-	for (auto BoneTransformKeys : BoneMap)
+void FCastImporter::AddBoneCurves(IAnimationDataController& Controller, const FReferenceSkeleton& RefSkeleton)
+{
+	const TArray<FName>& BoneNames = RefSkeleton.GetRawRefBoneNames();
+	for (FName BoneName : BoneNames)
+	{
+		Controller.AddBoneCurve(BoneName, false);
+	}
+}
+
+void FCastImporter::PopulateBoneTracks(IAnimationDataController& Controller, const TMap<FString, BoneCurve>& BoneMap,
+                                       const FReferenceSkeleton& RefSkeleton, uint32 NumberOfFrames)
+{
+	for (const auto& BoneTransformKeys : BoneMap)
 	{
 		FName NewCurveName(BoneTransformKeys.Key);
-
 		TArray<FVector3f> PositionalKeys;
 		TArray<FQuat4f> RotationalKeys;
 		TArray<FVector3f> ScalingKeys;
@@ -1239,6 +1271,7 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 		FVector BoneLocation = {0, 0, 0};
 		FQuat BoneRotation = {0, 0, 0, 1};
 		FVector BoneScale = {1, 1, 1};
+
 		if (RefSkeleton.GetRefBonePose().IsValidIndex(BoneID))
 		{
 			BoneLocation = RefSkeleton.GetRefBonePose()[BoneID].GetLocation();
@@ -1246,95 +1279,126 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 			BoneScale = RefSkeleton.GetRefBonePose()[BoneID].GetScale3D();
 		}
 
-		// 设置位置关键帧
-		for (int32 i = 0; i < BoneTransformKeys.Value.PositionX.Num(); ++i)
-		{
-			if (AnimMode != CastAIT_Absolutely &&
-				ImportOptions->AnimImportType == CastAIT_Absolutely)
-			{
-				PositionalKeys.Add({
-					BoneTransformKeys.Value.PositionX[i] + (float)BoneLocation.X,
-					-(BoneTransformKeys.Value.PositionY[i] + (float)BoneLocation.Y),
-					BoneTransformKeys.Value.PositionZ[i] + (float)BoneLocation.Z
-				});
-			}
-			else
-			{
-				PositionalKeys.Add({
-					BoneTransformKeys.Value.PositionX[i],
-					-BoneTransformKeys.Value.PositionY[i],
-					BoneTransformKeys.Value.PositionZ[i]
-				});
-			}
-		}
+		SetPositionalKeys(PositionalKeys, BoneTransformKeys.Value, BoneLocation, NumberOfFrames);
+		SetRotationalKeys(RotationalKeys, BoneTransformKeys.Value, BoneRotation, RefSkeleton, BoneID, NumberOfFrames);
+		SetScalingKeys(ScalingKeys, BoneTransformKeys.Value, BoneScale, NumberOfFrames);
 
-		if (PositionalKeys.IsEmpty())
-		{
-			if (AnimMode != CastAIT_Absolutely &&
-				ImportOptions->AnimImportType == CastAIT_Absolutely)
-			{
-				PositionalKeys.Add({(float)BoneLocation.X, (float)BoneLocation.Y, (float)BoneLocation.Z});
-			}
-			else
-			{
-				PositionalKeys.AddZeroed();
-			}
-		}
-		FVector3f LastPos = PositionalKeys.Last();
-		while (PositionalKeys.Num() < (int32)NumberOfFrames) PositionalKeys.Add(LastPos);
-		// 设置旋转关键帧
-		for (int32 i = 0; i < BoneTransformKeys.Value.Rotation.Num(); ++i)
-		{
-			RotationalKeys.Add({
-				(float)BoneTransformKeys.Value.Rotation[i].X,
-				-(float)BoneTransformKeys.Value.Rotation[i].Y,
-				(float)BoneTransformKeys.Value.Rotation[i].Z,
-				-(float)BoneTransformKeys.Value.Rotation[i].W
-			});
-			RotationalKeys.Last().Normalize();
-		}
-		if (RotationalKeys.IsEmpty())
-			RotationalKeys.Add({
-				(float)BoneRotation.X, (float)BoneRotation.Y, (float)BoneRotation.Z, (float)BoneRotation.W
-			});
-		FQuat4f LastRotational = RotationalKeys.Last();
-		while (RotationalKeys.Num() < (int32)NumberOfFrames) RotationalKeys.Add(LastRotational);
-		// 设置缩放关键帧
-		for (int32 i = 0; i < BoneTransformKeys.Value.ScaleX.Num(); ++i)
-		{
-			ScalingKeys.Add({
-				BoneTransformKeys.Value.ScaleX[i],
-				BoneTransformKeys.Value.ScaleY[i],
-				BoneTransformKeys.Value.ScaleZ[i],
-			});
-		}
-		if (ScalingKeys.IsEmpty()) ScalingKeys.Add({(float)BoneScale.X, (float)BoneScale.Y, (float)BoneScale.Z});
-		FVector3f LastScale = ScalingKeys.Last();
-		while (ScalingKeys.Num() < (int32)NumberOfFrames) ScalingKeys.Add(LastScale);
-
-		if ((ImportOptions->AnimImportType == CastAIT_Auto && AnimMode == CastAIT_Absolutely) ||
-			ImportOptions->AnimImportType == CastAIT_Absolutely)
+		if (ImportOptions->bConvertRefPosition)
 		{
 			Controller.AddBoneCurve(NewCurveName, false);
 		}
 		Controller.SetBoneTrackKeys(NewCurveName, PositionalKeys, RotationalKeys, ScalingKeys);
 	}
+}
 
-	// 动画通知
-	if (!Animation.NotificationTracks.IsEmpty() && ImportOptions->bImportAnimationNotify)
+void FCastImporter::SetPositionalKeys(TArray<FVector3f>& PositionalKeys, const BoneCurve& BoneCurveInfo,
+                                      const FVector& BoneLocation, uint32 NumberOfFrames)
+{
+	for (int32 i = 0; i < BoneCurveInfo.PositionX.Num(); ++i)
 	{
-		for (FCastNotificationTrackInfo& NotificationTrack : Animation.NotificationTracks)
+		if (ImportOptions->bConvertRefPosition)
 		{
-			for (uint32& KeyFrame : NotificationTrack.KeyFrameBuffer)
-			{
-				FAnimNotifyEvent NotifyEvent;
-				NotifyEvent.NotifyName = *NotificationTrack.Name;
-				NotifyEvent.SetTime(KeyFrame / AnimationRate);
-				DestSeq->Notifies.Add(NotifyEvent);
-			}
+			PositionalKeys.Add({
+				BoneCurveInfo.PositionX[i] + (float)BoneLocation.X,
+				-(BoneCurveInfo.PositionY[i] + (float)BoneLocation.Y),
+				BoneCurveInfo.PositionZ[i] + (float)BoneLocation.Z
+			});
+		}
+		else
+		{
+			PositionalKeys.Add({
+				BoneCurveInfo.PositionX[i],
+				-BoneCurveInfo.PositionY[i],
+				BoneCurveInfo.PositionZ[i]
+			});
 		}
 	}
 
+	if (PositionalKeys.IsEmpty())
+	{
+		if (ImportOptions->bConvertRefPosition)
+		{
+			PositionalKeys.Add({(float)BoneLocation.X, (float)BoneLocation.Y, (float)BoneLocation.Z});
+		}
+		else
+		{
+			PositionalKeys.AddZeroed();
+		}
+	}
+
+	ExtendToFrameCount(PositionalKeys, NumberOfFrames);
+}
+
+void FCastImporter::SetRotationalKeys(TArray<FQuat4f>& RotationalKeys, const BoneCurve& BoneCurveInfo,
+                                      const FQuat& BoneRotation, const FReferenceSkeleton& RefSkeleton, int32 BoneID,
+                                      uint32 NumberOfFrames)
+{
+	for (int32 i = 0; i < BoneCurveInfo.Rotation.Num(); ++i)
+	{
+		FQuat4f CurrentBoneRotation{
+			(float)BoneCurveInfo.Rotation[i].X,
+			-(float)BoneCurveInfo.Rotation[i].Y,
+			(float)BoneCurveInfo.Rotation[i].Z,
+			-(float)BoneCurveInfo.Rotation[i].W
+		};
+
+		if (ImportOptions->bConvertRefAnim && BoneID != INDEX_NONE)
+		{
+			FQuat4f RefRotation = FQuat4f(RefSkeleton.GetRefBonePose()[BoneID].GetRotation());
+			CurrentBoneRotation = RefRotation * CurrentBoneRotation;
+		}
+
+		RotationalKeys.Add(CurrentBoneRotation);
+		RotationalKeys.Last().Normalize();
+	}
+
+	if (RotationalKeys.IsEmpty())
+	{
+		RotationalKeys.Add({
+			(float)BoneRotation.X, (float)BoneRotation.Y, (float)BoneRotation.Z, (float)BoneRotation.W
+		});
+	}
+
+	ExtendToFrameCount(RotationalKeys, NumberOfFrames);
+}
+
+void FCastImporter::SetScalingKeys(TArray<FVector3f>& ScalingKeys, const BoneCurve& BoneCurveInfo,
+                                   const FVector& BoneScale, uint32 NumberOfFrames)
+{
+	for (int32 i = 0; i < BoneCurveInfo.ScaleX.Num(); ++i)
+	{
+		ScalingKeys.Add({
+			BoneCurveInfo.ScaleX[i],
+			BoneCurveInfo.ScaleY[i],
+			BoneCurveInfo.ScaleZ[i],
+		});
+	}
+
+	if (ScalingKeys.IsEmpty())
+	{
+		ScalingKeys.Add({(float)BoneScale.X, (float)BoneScale.Y, (float)BoneScale.Z});
+	}
+
+	ExtendToFrameCount(ScalingKeys, NumberOfFrames);
+}
+
+void FCastImporter::AddAnimationNotifies(UAnimSequence* DestSeq, const FCastAnimationInfo& Animation,
+                                         float AnimationRate)
+{
+	for (const FCastNotificationTrackInfo& NotificationTrack : Animation.NotificationTracks)
+	{
+		for (uint32 KeyFrame : NotificationTrack.KeyFrameBuffer)
+		{
+			FAnimNotifyEvent NotifyEvent;
+			NotifyEvent.NotifyName = *NotificationTrack.Name;
+			NotifyEvent.SetTime(KeyFrame / AnimationRate);
+			DestSeq->Notifies.Add(NotifyEvent);
+		}
+	}
+}
+
+void FCastImporter::FinalizeController(IAnimationDataController& Controller, UAnimSequence* DestSeq)
+{
 	Controller.NotifyPopulated();
 	Controller.CloseBracket(false);
 
@@ -1343,7 +1407,6 @@ bool FCastImporter::ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq,
 
 	FAssetRegistryModule::AssetCreated(DestSeq);
 	DestSeq->MarkPackageDirty();
-
-	return true;
 }
+
 #undef LOCTEXT_NAMESPACE

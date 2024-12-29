@@ -1,7 +1,16 @@
 # SeImporter
+
+有问题请在Github提交Issue，或者加入QQ群：`817519915`
+
+If you have any questions, please submit an issue on GitHub.
+
+喜欢这个项目请点star，这对我非常有帮助
+
+If you like this project, please give it a star; it would be very helpful to me.
+
 ## 特性 Features
 
-支持导入文件类型：SEModel，SEAnim，Cast
+支持导入文件类型：`SEModel`，`SEAnim`，`Cast`
 
 Supported file types for import: SEModel, SEAnim, Cast
 
@@ -13,10 +22,29 @@ For Cast files, please refer to: [cast/libraries at master · dtzxporter/cast (g
 
 It is recommended to use Cast for importing instead of SEModel and SEAnim formats.
 
-- 绝对动画，导入后动画即可正常播放
-- **Absolute animations**: Animations will play correctly after import.
-- 相对动画，导入后需要在动画蓝图使用转换插件，将它变为正常动画：[girlgg/SeAnimModule: Convert Refpose to Normal Pose (github.com)](https://github.com/girlgg/SeAnimModule)。相对动画结合这款插件，即可实现动画的叠加（主要用于第一人称动画）：https://github.com/dest1yo/MDA
-- **Relative animations**: After importing, you'll need to use a conversion plugin in the animation blueprint to turn it into a normal animation: [girlgg/SeAnimModule: Convert Refpose to Normal Pose (github.com)](https://github.com/girlgg/SeAnimModule). With this plugin, you can combine relative animations for layered animation effects (primarily used for first-person animations): https://github.com/dest1yo/MDA
+- 选项：`ConvertRefPosition`，勾选将会转换位置信息，如果导入后模型被拉伸，尝试取消这个选项
+
+- ConvertRefPosition - Checking this option will convert position information. If the model gets stretched after import, try unchecking this option.
+
+- 选项：`ConvertRefAnim`，勾选将会转换旋转信息，如果导入后模型旋转有误，尝试取消这个选项
+
+- `ConvertRefAnim` - Checking this option will convert rotation information. If the model’s rotation is incorrect after import, try unchecking this option.
+
+每个动画以上两个选项勾选方式不一样！！！
+
+The checking methods for these two options are different for each animation!!!
+
+使用以上两个选项，现在动画已经可以完全转换为UnrealEngine格式并正常预览，无需其他插件转换
+
+By using the above two options, animations can now be fully converted to Unreal Engine format and previewed correctly without the need for other plugin conversions.
+
+使用虚幻引擎Apply Additive节点即可实现动画叠加，无需其他插件进行叠加处理
+
+Animation layering can be achieved using the Apply Additive node in Unreal Engine, without the need for other plugins for layering.
+
+动画通知的导入仍在测试中
+
+The import of animation notifications is still under testing.
 
 使用blender导出为FBX时，请注意根骨骼名字必须是**Armature**
 

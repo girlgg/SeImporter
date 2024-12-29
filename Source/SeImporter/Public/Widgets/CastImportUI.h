@@ -64,8 +64,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
 	bool bDeleteRootNodeAnim{false};
 
+	/*UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
+	TEnumAsByte<ECastAnimImportType> AnimImportType{CastAIT_Auto};*/
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
-	TEnumAsByte<ECastAnimImportType> AnimImportType{CastAIT_Auto};
+	bool bConvertRefPosition{true};
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
+	bool bConvertRefAnim{true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))
 	bool bMaterials{true};
