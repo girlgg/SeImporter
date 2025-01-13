@@ -306,7 +306,6 @@ bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPat
 		if (TextureAddress == "unk_semantic_0x22")
 		{
 			Texture.TextureSlot = "Transparency";
-			// Texture.TextureType = "Alpha";
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
 		}
 		if (TextureAddress == "unk_semantic_0x26")
@@ -318,7 +317,6 @@ bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPat
 		if (TextureAddress == "unk_semantic_0x32")
 		{
 			Texture.TextureSlot = "Mask";
-			Texture.TextureType = "Mask";
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
 		}
 	}
