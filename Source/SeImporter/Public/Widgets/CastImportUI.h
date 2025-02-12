@@ -15,8 +15,10 @@ enum ECastImportType : int8
 UENUM(BlueprintType)
 enum EMaterialType : int8
 {
-	CastMT_IW9 UMETA(DisplayName="IW9 Engine"),
-	CastMT_IW8 UMETA(DisplayName="IW8 Engine")
+	CastMT_T7 UMETA(DisplayName = "T7 Engine"),
+	CastMT_IW8 UMETA(DisplayName = "IW8 Engine"),
+	CastMT_IW9 UMETA(DisplayName = "IW9/JUP Engine"),
+	CastMT_T10 UMETA(DisplayName = "T10 Engine")
 };
 
 UENUM(BlueprintType)
@@ -77,7 +79,7 @@ public:
 	bool bMaterials{true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly", EditCondition="bMaterials"))
-	TEnumAsByte<EMaterialType> MaterialType{CastMT_IW9};
+	TEnumAsByte<EMaterialType> MaterialType{CastMT_IW8};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
 		meta=(ImportType="GeoOnly", EditCondition="bMaterials"))

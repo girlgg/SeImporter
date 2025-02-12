@@ -207,8 +207,8 @@ UObject* UCastAssetFactory::FactoryCreateFile(
 
 	if (CreatedObject)
 	{
-		UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
-		AssetEditorSubsystem->OpenEditorForAsset(CreatedObject);
+		//UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
+		//AssetEditorSubsystem->OpenEditorForAsset(CreatedObject);
 	}
 
 	return CreatedObject;

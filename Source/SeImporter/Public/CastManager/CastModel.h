@@ -61,11 +61,29 @@ public:
 	FString TextureSlot{""};
 };
 
+enum ESettingType : int
+{
+	Color UMETA(DisplayName = "Color"),
+	Float4 UMETA(DisplayName = "Float4"),
+	Float3 UMETA(DisplayName = "Float3"),
+	Float2 UMETA(DisplayName = "Float2"),
+	Float1 UMETA(DisplayName = "Float1"),
+};
+
+class FCastSettingInfo
+{
+public:
+	ESettingType Type{ Float4 };
+	FString Name{ "" };
+	FVector4 Value{ 0 };
+};
+
 struct FCastMaterialInfo
 {
 	uint64 MaterialHash;
 
 	FString Name;
+	FString TechSet;
 	FString Type;
 	uint64 AlbedoFileHash;
 	uint64 DiffuseFileHash;
@@ -81,8 +99,11 @@ struct FCastMaterialInfo
 
 	TMap<uint64, FString> FileMap;
 
-	// 从image.txt获取的材质
+	// images.txt
 	TArray<FCastTextureInfo> Textures;
+
+	// settings.txt
+	TArray<FCastSettingInfo> Settings;
 
 public:
 	FORCEINLINE FString GetName() const { return Name; }

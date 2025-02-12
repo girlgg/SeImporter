@@ -93,7 +93,11 @@ public:
 	                      FString TextureFormat);
 	bool AnalysisTexture(FCastTextureInfo& Texture, FString ParentPath, FString TextureLineText, FString TexturePath,
 	                     const FString& ImageFormat);
+
+	bool AnalysisSetting(FCastSettingInfo& Setting, FString SettingLineText);
+
 	bool ImportTexture(FCastTextureInfo& Texture, const FString& FilePath, const FString& ParentPath, bool bSRGB);
+	static FString NoIllegalSigns(const FString& InString);
 	UMaterialInterface* CreateMaterialInstance(const FCastMaterialInfo& Material, const UObject* ParentPackage);
 
 	void ClearAllCaches();
