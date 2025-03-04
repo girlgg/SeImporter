@@ -51,7 +51,7 @@ struct FCastImportOptions
 	FString TextureFormat;
 
 	bool bImportMaterial;
-	bool bUseGlobalMaterialsPath;
+	ECastTextureImportType TexturePathType;
 	bool bImportAsSkeletal;
 	bool bImportMesh;
 	bool bImportAnimations;
@@ -89,8 +89,8 @@ public:
 	bool GetSceneInfo(FString Filename);
 	bool ImportFile(FString Filename);
 	bool ImportFromFile(FString Filename);
-	void AnalysisMaterial(FString ParentPath, FString MaterialPath, FString TexturePath,
-	                      FString TextureFormat);
+	void AnalysisMaterial(const FString& ParentPath, FString MaterialPath, FString TexturePath,
+	                      FString TextureFormat, bool bUseGlobalTexturePath = false);
 	bool AnalysisTexture(FCastTextureInfo& Texture, FString ParentPath, FString TextureLineText, FString TexturePath,
 	                     const FString& ImageFormat);
 	bool ImportTexture(FCastTextureInfo& Texture, const FString& FilePath, const FString& ParentPath, bool bSRGB);
@@ -142,7 +142,7 @@ protected:
 		TArray<float> ScaleY;
 		TArray<float> ScaleZ;
 
-		ECastAnimImportType AnimMode{CastAIT_Absolutely};
+		ECastAnimImportType AnimMode{ECastAnimImportType::CastAIT_Absolutely};
 	};
 
 	bool ImportAnimation(USkeleton* Skeleton, UAnimSequence* DestSeq, FCastAnimationInfo& Animation);

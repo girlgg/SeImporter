@@ -5,13 +5,16 @@
 #include "FileHelpers.h"
 #include "IDesktopPlatform.h"
 #include "ISettingsModule.h"
+#include "SeLogChannels.h"
 #include "ActorFactories/ActorFactoryStaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Factories/CastAssetFactory.h"
 #include "Serialization/LargeMemoryReader.h"
 #include "Structures/SeModel.h"
 #include "Structures/SeModelMaterial.h"
 #include "Structures/SeModelStaticMesh.h"
 #include "Structures/SeModelTexture.h"
+#include "Utils/CastImporter.h"
 #include "Widgets/UserMeshOptions.h"
 
 #define LOCTEXT_NAMESPACE "FSeImporterModule"
@@ -30,41 +33,67 @@ void FSeImporterModule::ImportMapJson()
 {
 	// 创建对话框
 	TSharedRef<SWindow> DialogWindow = SNew(SWindow)
-		.Title(FText::FromString(TEXT("导入Json地图")))
-		.ClientSize(FVector2D(400, 200))
+		.Title(FText::FromString(TEXT("Import Json map")))
+		.ClientSize(FVector2D(500, 300))
 		.SizingRule(ESizingRule::Autosized);
 
 	// Json文件路径
 	TSharedPtr<SEditableTextBox> JsonFilePathBox;
 	SAssignNew(JsonFilePathBox, SEditableTextBox)
-	.Text(FText::FromString(TEXT("Json文件路径")));
+	.Text(FText::FromString(TEXT("Json file path")));
+
 	TSharedPtr<SButton> OpenFileButton;
 	SAssignNew(OpenFileButton, SButton)
-	.Text(FText::FromString(TEXT("打开Json文件")))
+	.Text(FText::FromString(TEXT("open Json file")))
 	.OnClicked_Raw(this, &FSeImporterModule::OnOpenJsonFile, JsonFilePathBox);
 
 	// 模型文件夹路径
 	TSharedPtr<SEditableTextBox> ModelFolderPathBox;
 	SAssignNew(ModelFolderPathBox, SEditableTextBox)
-	.Text(FText::FromString(TEXT("模型文件夹路径")));
+	.Text(FText::FromString(TEXT("model folder path")));
+
 	// 创建打开模型文件夹对话框按钮
 	TSharedPtr<SButton> OpenModelFolderButton;
 	SAssignNew(OpenModelFolderButton, SButton)
-	.Text(FText::FromString(TEXT("导入模型文件夹")))
+	.Text(FText::FromString(TEXT("select path")))
 	.OnClicked_Raw(this, &FSeImporterModule::OnOpenModelFolder, ModelFolderPathBox);
 
 	// 模型路径
 	TSharedPtr<SEditableTextBox> ModelPathBox;
 	SAssignNew(ModelPathBox, SEditableTextBox)
-	.Text(FText::FromString(TEXT("虚幻模型路径")));
+	.Text(FText::FromString(TEXT("save to content path")));
+
+	TSharedPtr<SComboBox<TSharedPtr<FString>>> ImportTypeComboBox;
+
+	// 创建下拉菜单选项
+	TArray<TSharedPtr<FString>> ImportTypeOptions;
+	ImportTypeOptions.Add(MakeShared<FString>(TEXT("Model/Material/Image")));
+	ImportTypeOptions.Add(MakeShared<FString>(TEXT("GlobalMaterials/Material/Image")));
+	ImportTypeOptions.Add(MakeShared<FString>(TEXT("GlobalImages/Image")));
+
+	// 创建下拉菜单
+	SAssignNew(ImportTypeComboBox, SComboBox<TSharedPtr<FString>>)
+	.OptionsSource(&ImportTypeOptions)
+	.OnSelectionChanged_Raw(this, &FSeImporterModule::OnImportTypeSelectionChanged)
+	.OnGenerateWidget_Raw(this, &FSeImporterModule::GenerateImportTypeWidget)
+	.Content()
+	[
+		SNew(STextBlock)
+		.Text_Raw(this, &FSeImporterModule::GetSelectedImportTypeText)
+	];
+
+	// 全局材质路径编辑框
+	SAssignNew(GlobalMaterialPathBox, SEditableTextBox)
+	.Text(FText::FromString(TEXT("Global material path")))
+	.Visibility(EVisibility::Collapsed);
 
 	TSharedPtr<SButton> ConfirmButton, CancelButton;
 	SAssignNew(ConfirmButton, SButton)
-	.Text(FText::FromString(TEXT("确认")))
+	.Text(FText::FromString(TEXT("Confirm")))
 	.OnClicked_Raw(this, &FSeImporterModule::OnConfirmImport, DialogWindow, JsonFilePathBox, ModelFolderPathBox,
-	               ModelPathBox);
+	               ModelPathBox, GlobalMaterialPathBox);
 	SAssignNew(CancelButton, SButton)
-	.Text(FText::FromString(TEXT("取消")))
+	.Text(FText::FromString(TEXT("Cancel")))
 	.OnClicked_Raw(this, &FSeImporterModule::OnCancelImport, DialogWindow);
 
 
@@ -72,7 +101,7 @@ void FSeImporterModule::ImportMapJson()
 	(
 		SNew(SVerticalBox)
 		+ SVerticalBox::Slot()
-		.FillHeight(1)
+		.FillHeight(5)
 		[
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
@@ -82,12 +111,14 @@ void FSeImporterModule::ImportMapJson()
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
+			.Padding(5, 0, 0, 0)
 			[
 				OpenFileButton.ToSharedRef()
 			]
 		]
 		+ SVerticalBox::Slot()
-		.FillHeight(1)
+		.AutoHeight()
+		.Padding(5)
 		[
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
@@ -97,17 +128,43 @@ void FSeImporterModule::ImportMapJson()
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
+			.Padding(5, 0, 0, 0)
 			[
 				OpenModelFolderButton.ToSharedRef()
 			]
 		]
 		+ SVerticalBox::Slot()
-		.FillHeight(1)
+		.AutoHeight()
+		.Padding(5)
 		[
 			ModelPathBox.ToSharedRef()
 		]
 		+ SVerticalBox::Slot()
 		.AutoHeight()
+		.Padding(5)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("Material Path Type")))
+			]
+			+ SHorizontalBox::Slot()
+			.FillWidth(1)
+			[
+				ImportTypeComboBox.ToSharedRef()
+			]
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(5)
+		[
+			GlobalMaterialPathBox.ToSharedRef()
+		]
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		.Padding(5)
 		[
 			SNew(SHorizontalBox)
 			+ SHorizontalBox::Slot()
@@ -211,10 +268,68 @@ FReply FSeImporterModule::OnOpenModelFolder(TSharedPtr<SEditableTextBox> ModelFo
 	return FReply::Handled();
 }
 
+void FSeImporterModule::HandleImportTypeChanged(ECastTextureImportType NewImportType)
+{
+	CurrentImportType = NewImportType;
+
+	switch (NewImportType)
+	{
+	case ECastTextureImportType::CastTIT_Default:
+		GlobalMaterialPathBox->SetVisibility(EVisibility::Collapsed);
+		break;
+	case ECastTextureImportType::CastTIT_GlobalMaterials:
+	case ECastTextureImportType::CastTIT_GlobalImages:
+		GlobalMaterialPathBox->SetVisibility(EVisibility::Visible);
+		break;
+	default:
+		break;
+	}
+}
+
+void FSeImporterModule::OnImportTypeSelectionChanged(TSharedPtr<FString> NewSelection, ESelectInfo::Type SelectInfo)
+{
+	if (NewSelection.IsValid())
+	{
+		if (*NewSelection == TEXT("Model/Material/Image"))
+		{
+			HandleImportTypeChanged(ECastTextureImportType::CastTIT_Default);
+		}
+		else if (*NewSelection == TEXT("GlobalMaterials/Material/Image"))
+		{
+			HandleImportTypeChanged(ECastTextureImportType::CastTIT_GlobalMaterials);
+		}
+		else if (*NewSelection == TEXT("GlobalImages/Image"))
+		{
+			HandleImportTypeChanged(ECastTextureImportType::CastTIT_GlobalImages);
+		}
+	}
+}
+
+TSharedRef<SWidget> FSeImporterModule::GenerateImportTypeWidget(TSharedPtr<FString> Item)
+{
+	return SNew(STextBlock).Text(FText::FromString(*Item));
+}
+
+FText FSeImporterModule::GetSelectedImportTypeText() const
+{
+	switch (CurrentImportType)
+	{
+	case ECastTextureImportType::CastTIT_Default:
+		return FText::FromString(TEXT("Model/Material/Image"));
+	case ECastTextureImportType::CastTIT_GlobalMaterials:
+		return FText::FromString(TEXT("GlobalMaterials/Material/Image"));
+	case ECastTextureImportType::CastTIT_GlobalImages:
+		return FText::FromString(TEXT("GlobalImages/Image"));
+	default:
+		return FText::GetEmpty();
+	}
+}
+
 FReply FSeImporterModule::OnConfirmImport(TSharedRef<SWindow> DialogWindow,
                                           TSharedPtr<SEditableTextBox> JsonFilePathBox,
                                           TSharedPtr<SEditableTextBox> ModelFolderPathBox,
-                                          TSharedPtr<SEditableTextBox> ModelPathBox)
+                                          TSharedPtr<SEditableTextBox> ModelPathBox,
+                                          TSharedPtr<SEditableTextBox> InGlobalMaterialPathBox)
 {
 	FString JsonFilePath = JsonFilePathBox->GetText().ToString();
 	// 外部导入的模型文件夹
@@ -231,7 +346,6 @@ FReply FSeImporterModule::OnConfirmImport(TSharedRef<SWindow> DialogWindow,
 			{
 				FTransform ModelTransform;
 				TSharedPtr<FJsonObject> Object = JsonObjectValue->AsObject();
-				// int32 Index = Object->GetIntegerField(TEXT("Index"));
 				FString Name = Object->GetStringField(TEXT("Name"));
 				float Scale = Object->GetNumberField(TEXT("Scale"));
 				ModelTransform.SetScale3D(FVector(Scale, Scale, Scale));
@@ -275,60 +389,33 @@ FReply FSeImporterModule::OnConfirmImport(TSharedRef<SWindow> DialogWindow,
 				if (!ModelMesh)
 				{
 					// 目录中没有模型，导入模型
-					FString ModelFileBasePath = FPaths::Combine(ModelFolder, Name, Name + "_LOD");
-					for (int i = 0; i < 10; ++i)
+					FString ModelFileBasePath = FPaths::Combine(ModelFolder, Name, Name + "_LOD0");
+
+					FString ModelFilePath = FString::Printf(TEXT("%s.cast"), *ModelFileBasePath);
+					FString FileName_Fix = FPaths::GetBaseFilename(ModelFilePath);
+
+					FCastImporter* CastImporter = FCastImporter::GetInstance();
+					FSceneCleanupGuard SceneCleanupGuard(CastImporter);
+
+					FCastImportOptions* ImportOptions = CastImporter->GetImportOptions();
+					ImportOptions->bImportMaterial = true;
+					ImportOptions->GlobalMaterialPath = InGlobalMaterialPathBox->GetText().ToString();
+					ImportOptions->TexturePathType = CurrentImportType;
+					ImportOptions->TextureFormat = "png";
+					ImportOptions->bImportAsSkeletal = false;
+					ImportOptions->bImportMesh = true;
+					ImportOptions->MaterialType = EMaterialType::CastMT_IW9;
+
+					int32 ImportType = CastImporter->GetImportType(ModelFilePath);
+					if (ImportType != -1)
 					{
-						FString ModelFilePath = FString::Printf(TEXT("%s%d.semodel"), *ModelFileBasePath, i);
-						TArray64<uint8> FileDataOld;
-						if (!FFileHelper::LoadFileToArray(FileDataOld, *ModelFilePath))
-						{
-							continue;
-						}
-						FString FileName_Fix = FPaths::GetBaseFilename(ModelFilePath);
-						FLargeMemoryReader ModelReader(FileDataOld.GetData(), FileDataOld.Num());
-						SeModel* Mesh = new SeModel(FileName_Fix, ModelReader);
-						ModelReader.Close();
-
-						FString DiskMaterialsPath = FPaths::Combine(ModelFolder, Name);
-						FString DiskTexturesPath = FPaths::Combine(DiskMaterialsPath, TEXT("_images"));
-						TArray<FSeModelMaterial*> SeModelMaterials;
-
-						FString ModelPackageName = FString::Printf(TEXT("%s/%s"), *GameModelPath, *FileName_Fix);
-
-						for (auto MeshMaterial : Mesh->Materials)
-						{
-							FSeModelMaterial* CoDMaterial = new FSeModelMaterial();
-							CoDMaterial->Header->MaterialName = MeshMaterial.MaterialName;
-							FString MaterialContentFileName = FPaths::Combine(
-								DiskMaterialsPath, MeshMaterial.MaterialName + "_images.txt");
-
-							if (TArray<FString> MaterialTextContent;
-								FFileHelper::LoadFileToStringArray(MaterialTextContent, *MaterialContentFileName))
-							{
-								for (int32 LineIndex = 1; LineIndex < MaterialTextContent.Num(); ++LineIndex)
-								{
-									// 导入材质
-									if (FSeModelTexture CodTexture;
-										SeModelStaticMesh::ImportSeModelTexture(
-											CodTexture, GameModelPath,
-											MaterialTextContent[LineIndex],
-											FPaths::Combine(
-												DiskTexturesPath, MeshMaterial.MaterialName),"png"))
-									{
-										CoDMaterial->Textures.Add(CodTexture);
-									}
-								}
-							}
-							SeModelMaterials.Add(CoDMaterial);
-						}
-						SeModelStaticMesh MeshBuildingClass;
-						UUserMeshOptions* Options = NewObject<UUserMeshOptions>();
-						MeshBuildingClass.MeshOptions = Options;
+						FString ModelPackageName = FPaths::Combine(GameModelPath, FileName_Fix);
 						UObject* ParentPackage = CreatePackage(*ModelPackageName);
-						ModelMesh = Cast<UStaticMesh>(
-							MeshBuildingClass.CreateMesh(ParentPackage, Mesh, SeModelMaterials));
-						UEditorLoadingAndSavingUtils::SaveDirtyPackages(true, true);
-						break;
+						EObjectFlags Flags = RF_Public | RF_Standalone;
+
+						ModelMesh = Cast<UStaticMesh>(UCastAssetFactory::ExecuteImportProcess(
+							ParentPackage, *FileName_Fix, Flags, ModelFilePath,
+							CastImporter, ImportOptions, ModelFilePath));
 					}
 				}
 				if (ModelMesh)

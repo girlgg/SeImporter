@@ -22,7 +22,6 @@
 #include "Materials/MaterialInstanceConstant.h"
 #include "Rendering/SkeletalMeshModel.h"
 #include "Rendering/SkeletalMeshRenderData.h"
-#include "Runtime/Experimental/IoStoreOnDemand/Private/OnDemandHttpClient.h"
 #include "Widgets/CastOptionWindow.h"
 #include "Windows/WindowsPlatformApplicationMisc.h"
 
@@ -233,8 +232,8 @@ bool FCastImporter::ImportFromFile(FString Filename)
 	return Result;
 }
 
-void FCastImporter::AnalysisMaterial(FString ParentPath, FString MaterialPath, FString TexturePath,
-                                     FString TextureFormat)
+void FCastImporter::AnalysisMaterial(const FString& ParentPath, FString MaterialPath, FString TexturePath,
+                                     FString TextureFormat, bool bUseGlobalTexturePath)
 {
 	TArray<FCastRoot>& Roots = CastManager->Scene->Roots;
 	for (FCastRoot& Root : Roots)
@@ -249,14 +248,29 @@ void FCastImporter::AnalysisMaterial(FString ParentPath, FString MaterialPath, F
 				{
 					for (int32 LineIndex = 1; LineIndex < MaterialTextContent.Num(); ++LineIndex)
 					{
-						if (FCastTextureInfo CodTexture;
-							AnalysisTexture(CodTexture,
-							                ParentPath,
-							                MaterialTextContent[LineIndex],
-							                FPaths::Combine(TexturePath, Material.Name),
-							                TextureFormat))
+						if (bUseGlobalTexturePath)
 						{
-							Material.Textures.Add(CodTexture);
+							if (FCastTextureInfo CodTexture;
+								AnalysisTexture(CodTexture,
+								                ParentPath,
+								                MaterialTextContent[LineIndex],
+								                TexturePath,
+								                TextureFormat))
+							{
+								Material.Textures.Add(CodTexture);
+							}
+						}
+						else
+						{
+							if (FCastTextureInfo CodTexture;
+								AnalysisTexture(CodTexture,
+								                ParentPath,
+								                MaterialTextContent[LineIndex],
+								                FPaths::Combine(TexturePath, Material.Name),
+								                TextureFormat))
+							{
+								Material.Textures.Add(CodTexture);
+							}
 						}
 					}
 				}
@@ -268,12 +282,12 @@ void FCastImporter::AnalysisMaterial(FString ParentPath, FString MaterialPath, F
 bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPath, FString TextureLineText,
                                     FString TexturePath, const FString& ImageFormat)
 {
-	if (ImportOptions->MaterialType == CastMT_IW9)
+	if (ImportOptions->MaterialType == EMaterialType::CastMT_IW9)
 	{
 		TArray<FString> LineParts;
 		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
-		FString TextureAddress = LineParts[0];
-		FString TextureName = LineParts[1];
+		FString TextureAddress = LineParts[0].TrimStartAndEnd();
+		FString TextureName = LineParts[1].TrimStartAndEnd();
 		Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
 		Texture.TextureName = TextureName;
 		Texture.TextureType = TEXT("Normal");
@@ -282,12 +296,12 @@ bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPat
 		{
 			return false;
 		}
-		if (TextureAddress == "unk_semantic_0x0" || TextureAddress == "unk_semantic_0x55")
+		if (TextureAddress == "unk_semantic_0x0" || TextureAddress == "unk_semantic_0x55" || TextureAddress == "diffuse_map")
 		{
 			Texture.TextureSlot = "Albedo";
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
 		}
-		if (TextureAddress == "unk_semantic_0x4" || TextureAddress == "unk_semantic_0x56")
+		if (TextureAddress == "unk_semantic_0x4" || TextureAddress == "unk_semantic_0x56" || TextureAddress == "nog_map")
 		{
 			Texture.TextureSlot = "NOG";
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
@@ -320,7 +334,7 @@ bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPat
 			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
 		}
 	}
-	else if (ImportOptions->MaterialType == CastMT_IW8)
+	else if (ImportOptions->MaterialType == EMaterialType::CastMT_IW8)
 	{
 		TArray<FString> LineParts;
 		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
@@ -409,7 +423,7 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 	const auto MaterialInstanceFactory = NewObject<UMaterialInstanceConstantFactoryNew>();
 
 	FString MaterialPath;
-	if (ImportOptions->MaterialType == CastMT_IW9)
+	if (ImportOptions->MaterialType == EMaterialType::CastMT_IW9)
 	{
 		MaterialPath = "/SeImporter/BaseMaterials/BaseMat.BaseMat";
 		if (MaterialType == TEXT("Alpha"))
@@ -421,7 +435,7 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 			MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlphaMask.BaseMatWithAlphaMask";
 		}
 	}
-	else if (ImportOptions->MaterialType == CastMT_IW8)
+	else if (ImportOptions->MaterialType == EMaterialType::CastMT_IW8)
 	{
 		MaterialPath = "/SeImporter/BaseMaterials/BaseMat_IW8.BaseMat_IW8";
 	}
@@ -580,7 +594,7 @@ FCastImportOptions* FCastImporter::GetImportOptions(
 		ImportOptions->PhysicsAsset = ImportUI->PhysicsAsset;
 		ImportOptions->Skeleton = ImportUI->Skeleton;
 		ImportOptions->bImportMaterial = ImportUI->bMaterials;
-		ImportOptions->bUseGlobalMaterialsPath = ImportUI->bUseGlobalMaterialsPath;
+		ImportOptions->TexturePathType = ImportUI->TexturePathType;
 		ImportOptions->GlobalMaterialPath = ImportUI->GlobalMaterialPath;
 		ImportOptions->TextureFormat = ImportUI->TextureFormat;
 		ImportOptions->bImportAsSkeletal = ImportUI->bImportAsSkeletal;
@@ -739,10 +753,13 @@ USkeletalMesh* FCastImporter::ImportSkeletalMesh(CastScene::FImportSkeletalMeshA
 							const int32 MeshVertexID = TriangleVertexID[VertexOrder[FaceVertexID]];
 							Wedges.MatIndex = MatIdx;
 							Wedges.VertexIndex = MeshVertexID + VertexOffset;
-							Wedges.Color = FColor((Mesh.VertexColor[MeshVertexID] >> 0) & 0xFF,
-							                      (Mesh.VertexColor[MeshVertexID] >> 8) & 0xFF,
-							                      (Mesh.VertexColor[MeshVertexID] >> 16) & 0xFF,
-							                      (Mesh.VertexColor[MeshVertexID] >> 24) & 0xFF);
+							if (Mesh.VertexColor.IsValidIndex(MeshVertexID))
+							{
+								Wedges.Color = FColor((Mesh.VertexColor[MeshVertexID] >> 0) & 0xFF,
+								                      (Mesh.VertexColor[MeshVertexID] >> 8) & 0xFF,
+								                      (Mesh.VertexColor[MeshVertexID] >> 16) & 0xFF,
+								                      (Mesh.VertexColor[MeshVertexID] >> 24) & 0xFF);
+							}
 							Wedges.UVs[0] = FVector2f(Mesh.VertexUV[MeshVertexID].X, Mesh.VertexUV[MeshVertexID].Y);
 							Wedges.Reserved = 0;
 
@@ -1207,7 +1224,7 @@ TMap<FString, FCastImporter::BoneCurve> FCastImporter::ExtractCurves(USkeleton* 
 		BoneCurve& BoneCurveInfo = BoneMap.FindOrAdd(Curve.NodeName);
 		if (Curve.Mode != "absolute")
 		{
-			BoneCurveInfo.AnimMode = CastAIT_Relative;
+			BoneCurveInfo.AnimMode = ECastAnimImportType::CastAIT_Relative;
 		}
 		AssignCurveValues(BoneCurveInfo, Curve);
 	}

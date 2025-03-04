@@ -3,7 +3,7 @@
 #include "CastImportUI.generated.h"
 
 UENUM(BlueprintType)
-enum ECastImportType : int8
+enum class ECastImportType : uint8
 {
 	Cast_StaticMesh UMETA(DisplayName="Static Mesh"),
 	Cast_SkeletalMesh UMETA(DisplayName="Skeletal Mesh"),
@@ -13,18 +13,26 @@ enum ECastImportType : int8
 };
 
 UENUM(BlueprintType)
-enum EMaterialType : int8
+enum class EMaterialType : uint8
 {
 	CastMT_IW9 UMETA(DisplayName="IW9 Engine"),
 	CastMT_IW8 UMETA(DisplayName="IW8 Engine")
 };
 
 UENUM(BlueprintType)
-enum ECastAnimImportType : uint8
+enum class ECastAnimImportType : uint8
 {
 	CastAIT_Auto UMETA(DisplayName="Automatically detect"),
 	CastAIT_Absolutely UMETA(DisplayName="Force as absolute"),
 	CastAIT_Relative UMETA(DisplayName="Force as relative")
+};
+
+UENUM(BlueprintType)
+enum class ECastTextureImportType : uint8
+{
+	CastTIT_Default UMETA(DisplayName="Model/Material/Image"),
+	CastTIT_GlobalMaterials UMETA(DisplayName="GlobalMaterials/Material/Image"),
+	CastTIT_GlobalImages UMETA(DisplayName="GlobalImages/Image")
 };
 
 UCLASS(BlueprintType, config=EditorPerProjectUserSettings, AutoExpandCategories=(FTransform), HideCategories=Object,
@@ -64,9 +72,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
 	bool bDeleteRootNodeAnim{false};
 
-	/*UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
-	TEnumAsByte<ECastAnimImportType> AnimImportType{CastAIT_Auto};*/
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category=Animation, meta=(ImportType="SkeletalMesh|Animation", EditCondition="bImportAnimations"))
 	bool bConvertRefPosition{true};
 	
@@ -77,14 +82,14 @@ public:
 	bool bMaterials{true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly", EditCondition="bMaterials"))
-	TEnumAsByte<EMaterialType> MaterialType{CastMT_IW9};
+	EMaterialType MaterialType{EMaterialType::CastMT_IW9};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
 		meta=(ImportType="GeoOnly", EditCondition="bMaterials"))
-	bool bUseGlobalMaterialsPath{false};
+	ECastTextureImportType TexturePathType{ECastTextureImportType::CastTIT_Default};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
-		meta=(ImportType="GeoOnly", EditCondition="bUseGlobalMaterialsPath"))
+		meta=(ImportType="GeoOnly", EditCondition="TexturePathType!=ECastTextureImportType::CastTIT_Default"))
 	FString GlobalMaterialPath;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly"))

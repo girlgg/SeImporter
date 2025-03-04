@@ -38,6 +38,95 @@ UClass* UCastAssetFactory::ResolveSupportedClass()
 	return UStaticMesh::StaticClass();
 }
 
+UObject* UCastAssetFactory::HandleExistingAsset(UObject* InParent, FName InName, const FString& InFilename)
+{
+	UObject* ExistingObject = nullptr;
+	if (InParent)
+	{
+		ExistingObject = StaticFindObject(UObject::StaticClass(), InParent, *InName.ToString());
+		if (ExistingObject)
+		{
+			// TODO: 重新导入
+			FReimportHandler* ReimportHandler = nullptr;
+			UFactory* ReimportHandlerFactory = nullptr;
+			UAssetImportTask* HandlerOriginalImportTask = nullptr;
+			bool bIsObjectSupported = false;
+			UE_LOG(LogCast, Warning, TEXT("'%s' already exists and cannot be imported"), *InFilename)
+		}
+	}
+	return ExistingObject;
+}
+
+void UCastAssetFactory::HandleMaterialImport(FString&& ParentPath, const FString& InFilename,
+                                             FCastImporter* CastImporter,
+                                             FCastImportOptions* ImportOptions)
+{
+	FString FilePath = FPaths::GetPath(InFilename);
+	FString TextureBasePath;
+	FString TextureFormat = ImportOptions->TextureFormat;
+
+	if (ImportOptions->TexturePathType == ECastTextureImportType::CastTIT_Default)
+	{
+		TextureBasePath = FPaths::Combine(FilePath, TEXT("_images"));
+		CastImporter->AnalysisMaterial(ParentPath, FilePath, TextureBasePath, TextureFormat);
+	}
+	else if (ImportOptions->TexturePathType == ECastTextureImportType::CastTIT_GlobalMaterials)
+	{
+		TextureBasePath = ImportOptions->GlobalMaterialPath;
+		CastImporter->AnalysisMaterial(ParentPath, FilePath, TextureBasePath, TextureFormat);
+	}
+	else if (ImportOptions->TexturePathType == ECastTextureImportType::CastTIT_GlobalImages)
+	{
+		TextureBasePath = ImportOptions->GlobalMaterialPath;
+		CastImporter->AnalysisMaterial(ParentPath, FilePath, TextureBasePath, TextureFormat, true);
+	}
+}
+
+UObject* UCastAssetFactory::ExecuteImportProcess(UObject* InParent, FName InName, EObjectFlags Flags,
+                                                 const FString& InFilename,
+                                                 FCastImporter* CastImporter, FCastImportOptions* ImportOptions,
+                                                 FString InCurrentFilename)
+{
+	UObject* CreatedObject = nullptr;
+	if (!CastImporter->ImportFromFile(InCurrentFilename))
+	{
+		UE_LOG(LogCast, Error, TEXT("Fail to Import Cast File"));
+	}
+	else
+	{
+		if (ImportOptions->bImportMaterial && CastImporter->SceneInfo.TotalMaterialNum > 0)
+		{
+			FString ParentPath = FPaths::GetPath(InParent->GetPathName());
+			HandleMaterialImport(MoveTemp(ParentPath), InFilename, CastImporter, ImportOptions);
+		}
+
+		if (!ImportOptions->bImportAsSkeletal && ImportOptions->bImportMesh)
+		{
+			UStaticMesh* NewStaticMesh = CastImporter->ImportStaticMesh(InParent, InName, Flags);
+			CreatedObject = NewStaticMesh;
+		}
+		else if (ImportOptions->bImportMesh && CastImporter->SceneInfo.TotalGeometryNum > 0)
+		{
+			UPackage* Package = Cast<UPackage>(InParent);
+
+			FName OutputName = *FPaths::GetBaseFilename(InFilename);
+
+			CastScene::FImportSkeletalMeshArgs ImportSkeletalMeshArgs;
+			ImportSkeletalMeshArgs.InParent = Package;
+			ImportSkeletalMeshArgs.Name = OutputName;
+			ImportSkeletalMeshArgs.Flags = Flags;
+
+			USkeletalMesh* BaseSkeletalMesh = CastImporter->ImportSkeletalMesh(ImportSkeletalMeshArgs);
+			CreatedObject = BaseSkeletalMesh;
+		}
+		else if (ImportOptions->bImportAnimations && CastImporter->SceneInfo.bHasAnimation)
+		{
+			CreatedObject = CastImporter->ImportAnim(InParent, ImportOptions->Skeleton);
+		}
+	}
+	return CreatedObject;
+}
+
 UObject* UCastAssetFactory::FactoryCreateFile(
 	UClass* InClass,
 	UObject* InParent,
@@ -56,71 +145,51 @@ UObject* UCastAssetFactory::FactoryCreateFile(
 		SlowTask.MakeDialog(true);
 	}
 	SlowTask.EnterProgressFrame(0);
+
 	AdditionalImportedObjects.Empty();
 	FString FileExtension = FPaths::GetExtension(InFilename);
 	const TCHAR* Type = *FileExtension;
 
-	if (!IFileManager::Get().FileExists(*InFilename))
-	{
-		UE_LOG(LogCast, Error, TEXT("File '%s' not exists"), *InFilename)
-		return nullptr;
-	}
-
-	ParseParms(Parms);
-
-	CA_ASSUME(InParent);
+	RETURN_IF_PASS(!IFileManager::Get().FileExists(*InFilename),
+	               *FString::Printf(TEXT("File '%s' does not exist"), *InFilename));
 
 	if (bOperationCanceled)
 	{
 		bOutOperationCanceled = true;
-		GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPostImport(this, nullptr);
-		return nullptr;
+
+		RETURN_IF_PASS(bOperationCanceled, TEXT("Operator canceled"));
 	}
 
 	GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPreImport(this, InClass, InParent, InName, Type);
 
 	UObject* CreatedObject = nullptr;
-	UObject* ExistingObject = nullptr;
-	if (InParent)
+
+	if (UObject* ExistingObject = HandleExistingAsset(InParent, InName, InFilename))
 	{
-		ExistingObject = StaticFindObject(UObject::StaticClass(), InParent, *InName.ToString());
-		if (ExistingObject)
-		{
-			// TODO: 重新导入
-			FReimportHandler* ReimportHandler = nullptr;
-			UFactory* ReimportHandlerFactory = nullptr;
-			UAssetImportTask* HandlerOriginalImportTask = nullptr;
-			bool bIsObjectSupported = false;
-			UE_LOG(LogCast, Warning, TEXT("'%s' already exists and cannot be imported"), *InFilename)
-			return ExistingObject;
-		}
+		return ExistingObject;
 	}
 
 	FCastImporter* CastImporter = FCastImporter::GetInstance();
+	FSceneCleanupGuard SceneCleanupGuard(CastImporter);
+
+	SlowTask.EnterProgressFrame(1, LOCTEXT("DetectImportType", "Detecting file"));
 
 	if (bDetectImportTypeOnImport)
 	{
-		if (!DetectImportType(CurrentFilename))
-		{
-			GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPostImport(this, NULL);
-			return NULL;
-		}
+		RETURN_IF_PASS(!DetectImportType(CurrentFilename), TEXT("Cant detect import type"));
 	}
-
-	FCastImportOptions* ImportOptions = CastImporter->GetImportOptions();
-
-	ECastImportType ForcedImportType = Cast_StaticMesh;
 
 	bool bIsAutomated = IsAutomatedImport();
 	bool bShowImportDialog = bShowOption && !bIsAutomated;
 	bool bImportAll = false;
 
-	ImportOptions =
+	FCastImportOptions* ImportOptions =
 		CastImporter->GetImportOptions(ImportUI, bShowImportDialog, bIsAutomated, InParent->GetPathName(),
 		                               bOperationCanceled, bImportAll, UFactory::CurrentFilename);
 	bOutOperationCanceled = bOperationCanceled;
+
 	SlowTask.EnterProgressFrame(
-		4, GetImportTaskText(NSLOCTEXT("CastFactory", "BeginImportingCastTask", "Importing Cast mesh")));
+		3, GetImportTaskText(NSLOCTEXT("CastFactory", "BeginImportingCastTask", "Importing Cast mesh")));
 
 	if (bImportAll)
 	{
@@ -136,73 +205,19 @@ UObject* UCastAssetFactory::FactoryCreateFile(
 	{
 		AdditionalImportedObjects.Empty();
 		CreatedObject = nullptr;
-		return nullptr;
+		RETURN_IF_PASS(bOperationCanceled, TEXT("Operator canceled"));
 	}
 
-	if (ImportOptions)
+	CreatedObject = ExecuteImportProcess(InParent, InName, Flags, InFilename, CastImporter, ImportOptions,
+	                                     CurrentFilename);
+
+	if (!bOperationCanceled && CreatedObject)
 	{
-		if (!CastImporter->ImportFromFile(CurrentFilename))
-		{
-			UE_LOG(LogCast, Error, TEXT("Fail to Import Cast File"));
-		}
-		else
-		{
-			// 解析材质
-			if (ImportOptions->bImportMaterial && CastImporter->SceneInfo.TotalMaterialNum > 0)
-			{
-				FString FilePath = FPaths::GetPath(InFilename);
-				if (ImportOptions->bUseGlobalMaterialsPath)
-				{
-					CastImporter->AnalysisMaterial(FPaths::GetPath(InParent->GetPathName()),
-					                               FilePath,
-					                               ImportOptions->GlobalMaterialPath,
-					                               ImportOptions->TextureFormat);
-				}
-				else
-				{
-					CastImporter->AnalysisMaterial(FPaths::GetPath(InParent->GetPathName()),
-					                               FilePath,
-					                               FPaths::Combine(FilePath, TEXT("_images")),
-					                               ImportOptions->TextureFormat);
-				}
-			}
-
-			if (!ImportOptions->bImportAsSkeletal && ImportOptions->bImportMesh &&
-				CastImporter->SceneInfo.SkinnedMeshNum > 0)
-			{
-				UStaticMesh* NewStaticMesh = CastImporter->ImportStaticMesh(InParent, InName, Flags);
-
-				if (!bOperationCanceled && NewStaticMesh)
-				{
-					SlowTask.EnterProgressFrame(1, GetImportTaskText(
-						                            NSLOCTEXT("CastFactory", "EndingImportingFbxMeshTask",
-						                                      "Finalizing static mesh import.")));
-				}
-
-				CreatedObject = NewStaticMesh;
-			}
-			else if (ImportOptions->bImportMesh && CastImporter->SceneInfo.TotalGeometryNum > 0)
-			{
-				UPackage* Package = Cast<UPackage>(InParent);
-
-				FName OutputName = *FPaths::GetBaseFilename(InFilename);
-
-				CastScene::FImportSkeletalMeshArgs ImportSkeletalMeshArgs;
-				ImportSkeletalMeshArgs.InParent = Package;
-				ImportSkeletalMeshArgs.Name = OutputName;
-				ImportSkeletalMeshArgs.Flags = Flags;
-
-				USkeletalMesh* BaseSkeletalMesh = CastImporter->ImportSkeletalMesh(ImportSkeletalMeshArgs);
-				CreatedObject = BaseSkeletalMesh;
-			}
-			else if (ImportOptions->bImportAnimations && CastImporter->SceneInfo.bHasAnimation)
-			{
-				CreatedObject = CastImporter->ImportAnim(InParent, ImportOptions->Skeleton);
-			}
-		}
+		SlowTask.EnterProgressFrame(1, GetImportTaskText(
+			                            NSLOCTEXT("CastFactory", "EndingImportingFbxMeshTask",
+			                                      "Finalizing mesh import.")));
 	}
 
-	CastImporter->ReleaseScene();
 	GEditor->GetEditorSubsystem<UImportSubsystem>()->BroadcastAssetPostImport(this, CreatedObject);
 
 	if (CreatedObject)
