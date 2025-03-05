@@ -61,7 +61,7 @@ struct FCastImportOptions
 	ECastAnimImportType AnimImportType;
 	bool bConvertRefPosition;
 	bool bConvertRefAnim;
-	EMaterialType MaterialType;
+	ECastMaterialType MaterialType;
 };
 
 struct FCastMaterial

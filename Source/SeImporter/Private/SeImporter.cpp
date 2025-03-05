@@ -404,7 +404,7 @@ FReply FSeImporterModule::OnConfirmImport(TSharedRef<SWindow> DialogWindow,
 					ImportOptions->TextureFormat = "png";
 					ImportOptions->bImportAsSkeletal = false;
 					ImportOptions->bImportMesh = true;
-					ImportOptions->MaterialType = EMaterialType::CastMT_IW9;
+					ImportOptions->MaterialType = ECastMaterialType::CastMT_IW9;
 
 					int32 ImportType = CastImporter->GetImportType(ModelFilePath);
 					if (ImportType != -1)

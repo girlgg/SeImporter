@@ -13,7 +13,7 @@ enum class ECastImportType : uint8
 };
 
 UENUM(BlueprintType)
-enum class EMaterialType : uint8
+enum class ECastMaterialType : uint8
 {
 	CastMT_T7 UMETA(DisplayName = "T7 Engine"),
 	CastMT_IW8 UMETA(DisplayName = "IW8 Engine"),
@@ -84,7 +84,7 @@ public:
 	bool bMaterials{true};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material, meta=(ImportType="GeoOnly", EditCondition="bMaterials"))
-	EMaterialType MaterialType{EMaterialType::CastMT_IW9};
+	ECastMaterialType MaterialType{ECastMaterialType::CastMT_IW9};
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, config, Category = Material,
 		meta=(ImportType="GeoOnly", EditCondition="bMaterials"))
