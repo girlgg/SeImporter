@@ -24,6 +24,8 @@
 #include "Rendering/SkeletalMeshRenderData.h"
 #include "Widgets/CastOptionWindow.h"
 #include "Windows/WindowsPlatformApplicationMisc.h"
+#include "FileHelpers.h"
+#include "Factories/TextureFactory.h"
 
 #define LOCTEXT_NAMESPACE "CastMainImport"
 
@@ -242,9 +244,10 @@ void FCastImporter::AnalysisMaterial(const FString& ParentPath, FString Material
 		{
 			for (FCastMaterialInfo& Material : Model.Materials)
 			{
-				FString MaterialContentFileName = FPaths::Combine(MaterialPath, Material.Name + "_images.txt");
-				if (TArray<FString> MaterialTextContent;
-					FFileHelper::LoadFileToStringArray(MaterialTextContent, *MaterialContentFileName))
+				// Parse Textures
+				FString TexturesFileName = FPaths::Combine(MaterialPath, Material.Name + "_images.txt");
+				if (TArray<FString> TextureContent;
+					FFileHelper::LoadFileToStringArray(TextureContent, *TexturesFileName))
 				{
 					for (int32 LineIndex = 1; LineIndex < MaterialTextContent.Num(); ++LineIndex)
 					{
@@ -274,6 +277,26 @@ void FCastImporter::AnalysisMaterial(const FString& ParentPath, FString Material
 						}
 					}
 				}
+
+				// Parse Settings
+				FString SettingsFileName = FPaths::Combine(MaterialPath, Material.Name + "_settings.txt");
+				if (TArray<FString> SettingsContent;
+					FFileHelper::LoadFileToStringArray(SettingsContent, *SettingsFileName))
+				{
+					TArray<FString> TechSetLineParts;
+					SettingsContent[1].ParseIntoArray(TechSetLineParts, TEXT(": "), false);
+					Material.TechSet = TechSetLineParts[1];
+
+					for (int32 LineIndex = 3; LineIndex < SettingsContent.Num(); ++LineIndex)
+					{
+						if (FCastSettingInfo CodSetting;
+							AnalysisSetting(CodSetting,
+								SettingsContent[LineIndex]))
+						{
+							Material.Settings.Add(CodSetting);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -282,92 +305,169 @@ void FCastImporter::AnalysisMaterial(const FString& ParentPath, FString Material
 bool FCastImporter::AnalysisTexture(FCastTextureInfo& Texture, FString ParentPath, FString TextureLineText,
                                     FString TexturePath, const FString& ImageFormat)
 {
-	if (ImportOptions->MaterialType == EMaterialType::CastMT_IW9)
-	{
-		TArray<FString> LineParts;
-		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
-		FString TextureAddress = LineParts[0].TrimStartAndEnd();
-		FString TextureName = LineParts[1].TrimStartAndEnd();
-		Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
-		Texture.TextureName = TextureName;
-		Texture.TextureType = TEXT("Normal");
+	//if (ImportOptions->MaterialType == CastMT_IW9)
+	//{
+	//	TArray<FString> LineParts;
+	//	TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
+	//	FString TextureAddress = LineParts[0];
+	//	FString TextureName = LineParts[1];
+	//	Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
+	//	Texture.TextureName = TextureName;
+	//	Texture.TextureType = TEXT("Normal");
 
-		if (TextureName[0] == '$' || !FPaths::FileExists(Texture.TexturePath))
-		{
-			return false;
-		}
-		if (TextureAddress == "unk_semantic_0x0" || TextureAddress == "unk_semantic_0x55" || TextureAddress == "diffuse_map")
-		{
-			Texture.TextureSlot = "Albedo";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
-		}
-		if (TextureAddress == "unk_semantic_0x4" || TextureAddress == "unk_semantic_0x56" || TextureAddress == "nog_map")
-		{
-			Texture.TextureSlot = "NOG";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
-		}
-		if (TextureAddress == "unk_semantic_0x8")
-		{
-			Texture.TextureSlot = "Emission";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
-		}
-		if (TextureAddress == "unk_semantic_0xC")
-		{
-			Texture.TextureSlot = "Alpha";
-			Texture.TextureType = "Alpha";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
-		}
-		if (TextureAddress == "unk_semantic_0x22")
-		{
-			Texture.TextureSlot = "Transparency";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
-		}
-		if (TextureAddress == "unk_semantic_0x26")
-		{
-			// TODO：SSS材质
-			Texture.TextureSlot = "Specular_Mask";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
-		}
-		if (TextureAddress == "unk_semantic_0x32")
-		{
-			Texture.TextureSlot = "Mask";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
-		}
-	}
-	else if (ImportOptions->MaterialType == EMaterialType::CastMT_IW8)
-	{
-		TArray<FString> LineParts;
-		TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
-		FString TextureAddress = LineParts[0];
-		FString TextureName = LineParts[1];
-		Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
-		Texture.TextureName = TextureName;
-		// Texture.TextureType = TEXT("Normal");
+	//	if (TextureName[0] == '$' || !FPaths::FileExists(Texture.TexturePath))
+	//	{
+	//		return false;
+	//	}
+	//	if (TextureAddress == "unk_semantic_0x0" || TextureAddress == "unk_semantic_0x55")
+	//	{
+	//		Texture.TextureType = "Albedo";
+	//		return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+	//	}
+	//	if (TextureAddress == "unk_semantic_0x4" || TextureAddress == "unk_semantic_0x56")
+	//	{
+	//		Texture.TextureType = "NOG";
+	//		return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
+	//	}
+	//	if (TextureAddress == "unk_semantic_0x8")
+	//	{
+	//		Texture.TextureType = "Emission";
+	//		return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+	//	}
+	//	if (TextureAddress == "unk_semantic_0xC")
+	//	{
+	//		Texture.TextureType = "Alpha";
+	//		Texture.TextureType = "Alpha";
+	//		return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
+	//	}
+	//	if (TextureAddress == "unk_semantic_0x22")
+	//	{
+	//		Texture.TextureType = "Transparency";
+	//		return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+	//	}
+	//	if (TextureAddress == "unk_semantic_0x26")
+	//	{
+	//		// TODO：SSS材质
+	//		Texture.TextureType = "Specular_Mask";
+	//		return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
+	//	}
+	//	if (TextureAddress == "unk_semantic_0x32")
+	//	{
+	//		Texture.TextureType = "Mask";
+	//		return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+	//	}
+	//}
+	//else if (ImportOptions->MaterialType == CastMT_IW8)
+	//{
+	//	TArray<FString> LineParts;
+	//	TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
+	//	FString TextureName = LineParts[1];
+	//	Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
+	//	Texture.TextureName = TextureName;
+	//	Texture.TextureType = LineParts[0];
 
-		if (TextureAddress == "unk_semantic_0x0")
-		{
-			Texture.TextureSlot = "Albedo";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
-		}
-		if (TextureAddress == "unk_semantic_0x9")
-		{
-			Texture.TextureSlot = "Normal";
-			return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
-		}
+	//	return ImportTexture(Texture, Texture.TexturePath, ParentPath, false);
+	//}
+	//else if (ImportOptions->MaterialType == CastMT_T7)
+	//{
+	//	TArray<FString> LineParts;
+	//	TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
+	//	FString TextureName = LineParts[1];
+	//	Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
+	//	Texture.TextureName = TextureName;
+	//	Texture.TextureType = LineParts[0];
+
+	//	return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+	//}
+	//return false;
+	TArray<FString> LineParts;
+	TextureLineText.ParseIntoArray(LineParts, TEXT(","), false);
+	FString TextureName = LineParts[1];
+	Texture.TexturePath = FPaths::Combine(TexturePath, TextureName + "." + ImageFormat);
+	Texture.TextureName = TextureName;
+	Texture.TextureType = LineParts[0];
+
+	return ImportTexture(Texture, Texture.TexturePath, ParentPath, true);
+}
+
+bool FCastImporter::AnalysisSetting(FCastSettingInfo& Setting, FString SettingLineText)
+{
+	TArray<FString> LineParts;
+	SettingLineText.ParseIntoArray(LineParts, TEXT(","), false);
+
+	// Setting Name
+	Setting.Name = LineParts[1];
+
+	// Setting Type Map
+	static const TMap<FString, ESettingType> TypeMap = {
+	{TEXT("Color"), ESettingType::Color},
+	{TEXT("Float4"), ESettingType::Float4},
+	{TEXT("Float3"), ESettingType::Float3},
+	{TEXT("Float2"), ESettingType::Float2},
+	{TEXT("Float1"), ESettingType::Float1}
+	};
+
+	const ESettingType* SettingType = TypeMap.Find(LineParts[0]);
+	Setting.Type = *SettingType;
+
+	switch (Setting.Type)
+	{
+	case Color:
+	case Float4:	
+
+		Setting.Value = FVector4(
+			FCString::Atof(*LineParts[2]),
+			FCString::Atof(*LineParts[3]),
+			FCString::Atof(*LineParts[4]),
+			FCString::Atof(*LineParts[5])
+		);
+		break;
+	
+	case Float3:
+
+		Setting.Value = FVector4(
+			FCString::Atof(*LineParts[2]),
+			FCString::Atof(*LineParts[3]),
+			FCString::Atof(*LineParts[4]),
+			0
+		);
+		break;
+	
+	case Float2:	
+
+		Setting.Value = FVector4(
+			FCString::Atof(*LineParts[2]),
+			FCString::Atof(*LineParts[3]),
+			0,
+			0
+		);
+		break;
+	
+	case Float1:
+
+		Setting.Value = FVector4(
+			FCString::Atof(*LineParts[2]),
+			0,
+			0,
+			0
+		);
+		break;
+	
+	default:
+		return false;
 	}
-	return false;
+
+	return true;
 }
 
 bool FCastImporter::ImportTexture(FCastTextureInfo& Texture, const FString& FilePath, const FString& ParentPath,
                                   bool bSRGB)
 {
-	UAutomatedAssetImportData* ImportData = NewObject<UAutomatedAssetImportData>();
-	ImportData->bReplaceExisting = true;
 
 	FString TexturePath = FPaths::Combine(*ParentPath, TEXT("Materials"), TEXT("Textures"),
 	                                      FPaths::GetCleanFilename(FPaths::GetPath(FilePath)));
 
-	FString DestinationTexturePath = FPaths::Combine(TexturePath, FPaths::GetCleanFilename(FilePath));
+	FString DestinationTexturePath = FPaths::Combine(TexturePath, NoIllegalSigns(FPaths::GetBaseFilename(FilePath)));
 
 	FString AssetPath = DestinationTexturePath;
 	if (UTexture2D* LoadedTexture = LoadObject<UTexture2D>(nullptr, *AssetPath))
@@ -376,29 +476,103 @@ bool FCastImporter::ImportTexture(FCastTextureInfo& Texture, const FString& File
 		return true;
 	}
 
-	ImportData->DestinationPath = TexturePath;
-	ImportData->Filenames.Add(FilePath);
+	// Create the texture factory
+	UTextureFactory* TextureFactory = NewObject<UTextureFactory>();
+	TextureFactory->SuppressImportOverwriteDialog();
 
-	const FAssetToolsModule& AssetToolsModule = FModuleManager::GetModuleChecked<FAssetToolsModule>("AssetTools");
-	TArray<UObject*> ImportedAssets = AssetToolsModule.Get().ImportAssetsAutomated(ImportData);
+	bool bOutOperationCanceled = false;
+	// Create the parent package
+	UPackage* Package = CreatePackage(*AssetPath);
+	UTexture2D* ImportedTexture = (UTexture2D*)TextureFactory->FactoryCreateFile(
+		UTexture2D::StaticClass(),
+		Package,
+		FName(NoIllegalSigns(*FPaths::GetBaseFilename(FilePath))),
+		RF_Standalone | RF_Public,
+		FilePath,
+		nullptr,  // Parms
+		GWarn,
+		bOutOperationCanceled
+	);
 
-	if (ImportedAssets.Num() == 0) return false;
-
-	if (UTexture2D* ImportedTexture = Cast<UTexture2D>(ImportedAssets[0]))
+	if (ImportedTexture)
 	{
 		if (ImportedTexture->GetSizeX() < 2 && ImportedTexture->GetSizeY() < 2) return false;
 
-		if (!bSRGB)
+		ImportedTexture->PreEditChange(nullptr);
+		ImportedTexture->GetPackage()->FullyLoad();
+		ImportedTexture->GetPackage()->Modify();
+
+		// Apply settings based on TextureType
+		if (Texture.TextureType == "normalMap" ||
+			Texture.TextureType == "normalBodyMap" ||
+			Texture.TextureType == "detailMap" ||
+			Texture.TextureType == "detailMap1" ||
+			Texture.TextureType == "detailMap2" ||
+			Texture.TextureType == "detailNormal1" ||
+			Texture.TextureType == "detailNormal2" ||
+			Texture.TextureType == "detailNormal3" ||
+			Texture.TextureType == "detailNormal4" ||
+			Texture.TextureType == "transitionNormal" ||
+			Texture.TextureType == "flagRippleDetailMap" ||
+			Texture.TextureType == "distortionMap" ||
+			Texture.TextureType == "crackNormalMap")
 		{
-			ImportedTexture->CompressionSettings = TC_BC7;
+			ImportedTexture->CompressionSettings = TC_Normalmap;
+			ImportedTexture->bFlipGreenChannel = false;
+		}
+
+		else if (Texture.TextureType == "aoMap" ||
+			Texture.TextureType == "alphaMaskMap" ||
+			Texture.TextureType == "alphaMask" ||
+			Texture.TextureType == "breakUpMap" ||
+			Texture.TextureType == "specularMask" ||
+			Texture.TextureType == "specularMaskDetail2" ||
+			Texture.TextureType == "tintMask" ||
+			Texture.TextureType == "tintBlendMask" ||
+			Texture.TextureType == "thicknessMap" ||
+			Texture.TextureType == "revealMap" ||
+			Texture.TextureType == "transRevealMap" ||
+			Texture.TextureType == "thermalHeatmap" ||
+			Texture.TextureType == "transGlossMap" ||
+			Texture.TextureType == "flickerLookupMap" ||
+			Texture.TextureType == "glossMap" ||
+			Texture.TextureType == "glossBodyMap" ||
+			Texture.TextureType == "glossMapDetail2")
+		{
+			ImportedTexture->CompressionSettings = TC_Grayscale;
 			ImportedTexture->SRGB = false;
 		}
+
+		else if (Texture.TextureType == "customizeMask" ||
+			Texture.TextureType == "flowMap" ||
+			Texture.TextureType == "mixMap" ||
+			Texture.TextureType == "camoMaskMap" ||
+			Texture.TextureType == "detailNormalMask")
+		{
+			ImportedTexture->CompressionSettings = TC_Masks;
+		}
+		    // IW8
+		else if (Texture.TextureType == "unk_semantic_0x9" ||
+			Texture.TextureType == "unk_semantic_0xA" ||
+			// IW9/JUP
+			Texture.TextureType == "unk_semantic_0x4" || 
+			Texture.TextureType == "unk_semantic_0x5" || 
+			// T10
+			Texture.TextureType == "unk_semantic_0x58" || 
+			Texture.TextureType == "unk_semantic_0x65")
+		{
+			ImportedTexture->CompressionSettings = TC_Default;
+			ImportedTexture->SRGB = false;
+		}
+
+		ImportedTexture->PostEditChange();
 		ImportedTexture->UpdateResource();
-		ImportedTexture->GetPackage()->FullyLoad();
 		ImportedTexture->MarkPackageDirty();
+		UEditorLoadingAndSavingUtils::SavePackages(TArray<UPackage*>{ImportedTexture->GetPackage()}, false);
 		Texture.TextureObject = ImportedTexture;
 		return true;
 	}
+
 	return false;
 }
 
@@ -407,37 +581,115 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 {
 	UMaterialInterface* UnrealMaterialFinal = nullptr;
 	FString FullMaterialName = Material.Name;
-	FString MaterialType = TEXT("Normal");
-	for (const auto Texture : Material.Textures)
-	{
-		if (Texture.TextureType == TEXT("Alpha"))
-		{
-			MaterialType = TEXT("Alpha");
-		}
-		else if (Texture.TextureType == TEXT("Mask") && MaterialType == TEXT("Normal"))
-		{
-			MaterialType = TEXT("Mask");
-		}
-	}
-
+	FString MaterialType = TEXT("Base");
+	bool isMetallic = false;
+	bool isHead = false;
 	const auto MaterialInstanceFactory = NewObject<UMaterialInstanceConstantFactoryNew>();
 
 	FString MaterialPath;
-	if (ImportOptions->MaterialType == EMaterialType::CastMT_IW9)
+	if (ImportOptions->MaterialType == CastMT_T7)
 	{
-		MaterialPath = "/SeImporter/BaseMaterials/BaseMat.BaseMat";
-		if (MaterialType == TEXT("Alpha"))
-		{
-			MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlpha.BaseMatWithAlpha";
-		}
-		else if (MaterialType == TEXT("Mask"))
-		{
-			MaterialPath = "/SeImporter/BaseMaterials/BaseMatWithAlphaMask.BaseMatWithAlphaMask";
-		}
+		MaterialPath = FPaths::Combine("/UGC4579750/black_ops_2/Shading/T7/TechSets", Material.TechSet);
 	}
-	else if (ImportOptions->MaterialType == EMaterialType::CastMT_IW8)
+	if (ImportOptions->MaterialType == CastMT_IW8)
 	{
-		MaterialPath = "/SeImporter/BaseMaterials/BaseMat_IW8.BaseMat_IW8";
+		for (const auto Texture : Material.Textures)
+		{
+			// Check if metallic
+			if (Texture.TextureType == TEXT("unk_semantic_0x0"))
+			{
+				if (Texture.TextureObject->HasAlphaChannel())
+				{
+					isMetallic = true;
+				}
+			}
+			// Check if Skin
+			if (Texture.TextureType == TEXT("unk_semantic_0x4D"))
+			{
+				MaterialType = TEXT("Skin");
+				// Check if Head
+				//if (Texture.TextureType == TEXT("unk_semantic_0x7F"))
+				//	isHead = true;
+			}
+			// Check if Hair
+			if (Texture.TextureType == TEXT("unk_semantic_0x85"))
+			{
+				MaterialType = TEXT("Hair");
+			}
+			// Check if Eye
+			if (Texture.TextureType == TEXT("unk_semantic_0x86"))
+			{
+				MaterialType = TEXT("Eye");
+			}
+		}
+		MaterialPath = FPaths::Combine("/SeImporter/Shading/IW/IW8", "IW8_" + MaterialType);
+	}
+	if (ImportOptions->MaterialType == CastMT_IW9)
+	{
+		for (const auto Texture : Material.Textures)
+		{
+			// Check if metallic
+			if (Texture.TextureType == TEXT("unk_semantic_0x0"))
+			{
+				if (Texture.TextureObject->HasAlphaChannel())
+				{
+					isMetallic = true;
+				}
+			}
+			//// Check if Skin
+			// if (Texture.TextureType == TEXT("unk_semantic_0x26"))
+			// {
+			// 	 if (Texture.TextureName != "$black" && Texture.TextureName != "$white")
+			// 	 	MaterialType = TEXT("Skin");
+			// 	//Check if Head
+			// 	if (Texture.TextureType == TEXT("unk_semantic_0x7F"))
+			// 		isHead = true;
+			// }
+			//// Check if Hair
+			// if (Texture.TextureType == TEXT("unk_semantic_0x85"))
+			// {
+			// 	MaterialType = TEXT("Hair");
+			// }
+			//// Check if Eye
+			// if (Texture.TextureType == TEXT("unk_semantic_0x86"))
+			// {
+			// 	MaterialType = TEXT("Eye");
+			// }
+		}
+		MaterialPath = FPaths::Combine("/SeImporter/Shading/IW/IW9", "IW9_" + MaterialType);
+	}
+	if (ImportOptions->MaterialType == CastMT_T10)
+	{
+		for (const auto Texture : Material.Textures)
+		{
+			// Check if metallic
+			if (Texture.TextureType == TEXT("unk_semantic_0x57"))
+			{
+				if (Texture.TextureObject->HasAlphaChannel())
+				{
+					isMetallic = true;
+				}
+			}
+			// // Check if Skin
+			// if (Texture.TextureType == TEXT("unk_semantic_0x4D"))
+			// {
+			// 	MaterialType = TEXT("Skin");
+			// 	// Check if Head
+			// 	if (Texture.TextureType == TEXT("unk_semantic_0x7F"))
+			// 		isHead = true;
+			// }
+			// // Check if Hair
+			// if (Texture.TextureType == TEXT("unk_semantic_0x85"))
+			// {
+			// 	MaterialType = TEXT("Hair");
+			// }
+			// // Check if Eye
+			// if (Texture.TextureType == TEXT("unk_semantic_0x86"))
+			// {
+			// 	MaterialType = TEXT("Eye");
+			// }
+		}
+		MaterialPath = FPaths::Combine("/SeImporter/Shading/IW/T10", "T10_" + MaterialType);
 	}
 
 	MaterialInstanceFactory->InitialParent =
@@ -457,24 +709,57 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 	FStaticParameterSet StaticParameters;
 	MaterialInstance->GetStaticParameterValues(StaticParameters);
 
+	for (auto Texture : Material.Textures)
 	{
-		for (auto Texture : Material.Textures)
+		if (!Texture.TextureObject) { continue; }
+		UTexture* TextureAsset = Cast<UTexture>(Texture.TextureObject);
+		if (TextureAsset && !Texture.TextureType.IsEmpty())
 		{
-			if (!Texture.TextureObject) { continue; }
-			UTexture* TextureAsset = Cast<UTexture>(Texture.TextureObject);
-			FString& TextureType = Texture.TextureType;
-			if (TextureAsset && !Texture.TextureSlot.IsEmpty())
-			{
-				for (auto& SwitchParam : StaticParameters.StaticSwitchParameters)
-				{
-					SwitchParam.bOverride = true;
-					SwitchParam.Value = true;
-				}
-				FMaterialParameterInfo TextureParameterInfo(*Texture.TextureSlot, GlobalParameter, -1);
-				MaterialInstance->SetTextureParameterValueEditorOnly(TextureParameterInfo, TextureAsset);
-			}
+			FMaterialParameterInfo TextureParameterInfo(*Texture.TextureType, GlobalParameter, -1);
+			MaterialInstance->SetTextureParameterValueEditorOnly(TextureParameterInfo, TextureAsset);
 		}
 	}
+
+	for (auto Setting : Material.Settings)
+	{
+		// Get the right parameter
+		FMaterialParameterInfo ParameterInfo(*Setting.Name, GlobalParameter, -1);
+
+		switch (Setting.Type)
+		{
+		case Float1:
+
+			MaterialInstance->SetScalarParameterValueEditorOnly(ParameterInfo, Setting.Value.X);
+			break;
+
+		case Float2:
+
+			MaterialInstance->SetVectorParameterValueEditorOnly(ParameterInfo, FLinearColor(Setting.Value.X, Setting.Value.Y, 0, 0));
+			break;
+
+		case Float3:
+
+			MaterialInstance->SetVectorParameterValueEditorOnly(ParameterInfo, FLinearColor(Setting.Value.X, Setting.Value.Y, Setting.Value.Z, 0));
+			break;
+
+		case Color:
+		case Float4:
+
+			MaterialInstance->SetVectorParameterValueEditorOnly(ParameterInfo, FLinearColor(Setting.Value.X, Setting.Value.Y, Setting.Value.Z, Setting.Value.W));
+			break;
+		}
+	}
+
+	if (isMetallic)
+	{
+		FMaterialParameterInfo ParameterInfo("Default Spec", GlobalParameter, -1);
+		MaterialInstance->SetScalarParameterValueEditorOnly(ParameterInfo, 0);
+	}
+	//if (isHead)
+	//{
+	//	FMaterialParameterInfo ParameterInfo("Roughness Multiplier", GlobalParameter, -1);
+	//	MaterialInstance->SetScalarParameterValueEditorOnly(ParameterInfo, 2);
+	//}
 
 	MaterialInstance->UpdateStaticPermutation(StaticParameters);
 
@@ -1422,6 +1707,11 @@ void FCastImporter::FinalizeController(IAnimationDataController& Controller, UAn
 
 	FAssetRegistryModule::AssetCreated(DestSeq);
 	DestSeq->MarkPackageDirty();
+}
+
+FString FCastImporter::NoIllegalSigns(const FString& InString)
+{
+	return InString.Replace(TEXT("~"), TEXT("_")).Replace(TEXT("$"), TEXT("_")).Replace(TEXT("&"), TEXT("_")).Replace(TEXT("#"), TEXT("_"));
 }
 
 #undef LOCTEXT_NAMESPACE
