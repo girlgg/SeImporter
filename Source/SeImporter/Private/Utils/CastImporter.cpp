@@ -249,14 +249,14 @@ void FCastImporter::AnalysisMaterial(const FString& ParentPath, FString Material
 				if (TArray<FString> TextureContent;
 					FFileHelper::LoadFileToStringArray(TextureContent, *TexturesFileName))
 				{
-					for (int32 LineIndex = 1; LineIndex < MaterialTextContent.Num(); ++LineIndex)
+					for (int32 LineIndex = 1; LineIndex < TextureContent.Num(); ++LineIndex)
 					{
 						if (bUseGlobalTexturePath)
 						{
 							if (FCastTextureInfo CodTexture;
 								AnalysisTexture(CodTexture,
 								                ParentPath,
-								                MaterialTextContent[LineIndex],
+								                TextureContent[LineIndex],
 								                TexturePath,
 								                TextureFormat))
 							{
@@ -268,7 +268,7 @@ void FCastImporter::AnalysisMaterial(const FString& ParentPath, FString Material
 							if (FCastTextureInfo CodTexture;
 								AnalysisTexture(CodTexture,
 								                ParentPath,
-								                MaterialTextContent[LineIndex],
+								                TextureContent[LineIndex],
 								                FPaths::Combine(TexturePath, Material.Name),
 								                TextureFormat))
 							{
@@ -587,11 +587,11 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 	const auto MaterialInstanceFactory = NewObject<UMaterialInstanceConstantFactoryNew>();
 
 	FString MaterialPath;
-	if (ImportOptions->MaterialType == CastMT_T7)
+	if (ImportOptions->MaterialType == EMaterialType::CastMT_T7)
 	{
 		MaterialPath = FPaths::Combine("/UGC4579750/black_ops_2/Shading/T7/TechSets", Material.TechSet);
 	}
-	if (ImportOptions->MaterialType == CastMT_IW8)
+	if (ImportOptions->MaterialType == EMaterialType::CastMT_IW8)
 	{
 		for (const auto Texture : Material.Textures)
 		{
@@ -624,7 +624,7 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 		}
 		MaterialPath = FPaths::Combine("/SeImporter/Shading/IW/IW8", "IW8_" + MaterialType);
 	}
-	if (ImportOptions->MaterialType == CastMT_IW9)
+	if (ImportOptions->MaterialType == EMaterialType::CastMT_IW9)
 	{
 		for (const auto Texture : Material.Textures)
 		{
@@ -658,7 +658,7 @@ UMaterialInterface* FCastImporter::CreateMaterialInstance(const FCastMaterialInf
 		}
 		MaterialPath = FPaths::Combine("/SeImporter/Shading/IW/IW9", "IW9_" + MaterialType);
 	}
-	if (ImportOptions->MaterialType == CastMT_T10)
+	if (ImportOptions->MaterialType == EMaterialType::CastMT_T10)
 	{
 		for (const auto Texture : Material.Textures)
 		{
