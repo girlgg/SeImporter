@@ -5,22 +5,22 @@ class FCastNode;
 
 struct FCastMeshInfo
 {
-	FString Name;
-	TArray<FVector3f> VertexPositions;
-	TArray<FVector3f> VertexNormals;
-	TArray<FVector3f> VertexTangents;
+	FString Name{""};
+	TArray<FVector3f> VertexPositions{};
+	TArray<FVector3f> VertexNormals{};
+	TArray<FVector3f> VertexTangents{};
 	// TArray<TArray<uint32>> VertexColor;
-	TArray<uint32> VertexColor;
+	TArray<uint32> VertexColor{};
 	// TArray<TArray<FVector2f>> VertexUV;
-	TArray<FVector2f> VertexUV;
-	TArray<uint32> VertexWeightBone;
-	TArray<float> VertexWeightValue;
-	TArray<uint32> Faces;
-	TArray<uint32> ColorLayer;
-	uint32 UVLayer;
-	uint32 MaxWeight; // 每个顶点被多少个骨骼影响权重
-	FString SkinningMethod;
-	uint64 MaterialHash;
+	TArray<FVector2f> VertexUV{};
+	TArray<uint32> VertexWeightBone{};
+	TArray<float> VertexWeightValue{};
+	TArray<uint32> Faces{};
+	TArray<uint32> ColorLayer{};
+	uint32 UVLayer{};
+	uint32 MaxWeight{}; // 每个顶点被多少个骨骼影响权重
+	FString SkinningMethod{};
+	uint64 MaterialHash{};
 
 	FVector BBoxMax{0};
 	FVector BBoxMin{0};

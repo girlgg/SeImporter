@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "CastScene.h"
 
 struct FCastBlendShape
 {
@@ -55,6 +56,7 @@ class FCastTextureInfo
 {
 public:
 	UTexture2D* TextureObject{nullptr};
+	FString TextureSemantic{""};
 	FString TextureName{""};
 	FString TexturePath{""};
 	FString TextureType{""};

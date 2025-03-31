@@ -1,3 +1,7 @@
+# custom files
+*.wni
+*.dat
+
 # Visual Studio 2015 user specific files
 .vs/
 

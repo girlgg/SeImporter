@@ -30,7 +30,10 @@ public class SeImporter : ModuleRules
 			{
 				"Core",
 				"PhysicsCore",
-				"PhysicsUtilities"
+				"PhysicsUtilities", 
+				"OodleDataCompression",
+				"SQLiteCore",
+				"SQLiteSupport"
 			}
 		);
 
