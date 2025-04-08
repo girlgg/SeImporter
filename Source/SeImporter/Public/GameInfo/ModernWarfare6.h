@@ -2,6 +2,12 @@
 #include "BaseGame.h"
 #include "Structures/MW6GameStructures.h"
 #include "Structures/SharedStructures.h"
+#include "WraithX/CoDAssetType.h"
+
+struct FCoDModel;
+class FGameProcess;
+struct FCoDImage;
+struct FCodXImage;
 
 class FModernWarfare6 : public TBaseGame<FMW6GfxWorld, FMW6GfxWorldTransientZone, FMW6GfxWorldSurfaces, FMW6GfxSurface,
                                          FMW6GfxUgbSurfData, FMW6Material, FMW6GfxWorldStaticModels,
@@ -25,4 +31,7 @@ public:
 	virtual uint64 GetColorOffset(const FMW6XSurface& Surface) override;
 	virtual uint64 GetIndexDataOffset(const FMW6XSurface& Surface) override;
 	virtual uint64 GetPackedIndicesOffset(const FMW6XSurface& Surface) override;
+
+	static uint8 ReadXImage(TSharedPtr<FGameProcess> ProcessInstance, TSharedPtr<FCoDImage> ImageAddr, TArray<uint8>& ImageDataArray);
+	static void ReadXModel(TSharedPtr<FGameProcess> ProcessInstance, TSharedPtr<FCoDModel> ModelAddr);
 };

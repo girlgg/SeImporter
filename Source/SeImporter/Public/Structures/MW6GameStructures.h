@@ -217,6 +217,7 @@ struct FMW6XModelSurfs
 	uint8 Pad_24[32 - 24];										// 24
 	uint64 Shared;												// 32
 	uint16 NumSurfs;											// 40
+	uint8 Padding2[80 - 42];									// 42
 };
 
 struct FMW6XSurfaceShared
@@ -235,7 +236,6 @@ struct FMW6XSurface
 	uint32 TriCount;											// 28
 	uint8 Pad_08[60-32];										// 32
 	float OverrideScale;										// 60
-	// uint32 Offsets[14];										// 64
 	uint32 XyzOffset;											// 64
 	uint32 TexCoordOffset;										// 68
 	uint32 TangentFrameOffset;									// 72

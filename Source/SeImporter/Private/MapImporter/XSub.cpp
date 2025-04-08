@@ -1,29 +1,18 @@
 ﻿#include "MapImporter/XSub.h"
 
-#include "Compression/OodleDataCompressionUtil.h"
 #include "Serialization/LargeMemoryReader.h"
 #include "Utils/BinaryReader.h"
 #include "HAL/PlatformFilemanager.h"
 #include "Misc/FileHelper.h"
 #include "oodle2.h"
+#include "WraithX/CoDAssetDatabase.h"
 
-void FXSub::LoadFilesAsync(const FString& GamePath)
+FXSub::FXSub(uint64 GameID, const FString& GamePath)
 {
-	if (IsLoading.exchange(true))
-		return;
-
-	LoadCompletedEvent = FPlatformProcess::GetSynchEventFromPool();
-
 	SharedGamePath = GamePath;
 	FPaths::NormalizeFilename(SharedGamePath);
-
-	Async(EAsyncExecution::Thread, [this, GamePath]()
-	{
-		LoadFiles();
-
-		IsLoading.store(false);
-		LoadCompletedEvent->Trigger();
-	});
+	// TODO 异步加载
+	FCoDAssetDatabase::Get().XSub_Initial(GameID, SharedGamePath);
 }
 
 void FXSub::LoadFiles()
@@ -150,7 +139,7 @@ void FXSub::ReadXSub(FLargeMemoryReader& Reader, const FString& FilePath, int32 
 		FXSubPackageCacheObject CacheObject;
 		CacheObject.Offset = ((PackedInfo >> 32) << 7);
 		CacheObject.CompressedSize = ((PackedInfo >> 1) & 0x3FFFFFFF);
-		CacheObject.RelativePath = FilePath;
+		CacheObject.Path = FilePath;
 
 		// 解析块头信息计算解压后尺寸
 		const int64 OriginalPos = Reader.Tell();
@@ -196,19 +185,17 @@ TArray<uint8> FXSub::ExtractXSubPackage(uint64 Key, uint32 Size)
 {
 	FRWScopeLock ReadLock(CacheLock, SLT_ReadOnly);
 
-	const FXSubPackageCacheObject* CacheObject = CacheObjects.Find(Key);
-	if (!CacheObject)
+	FXSubPackageCacheObject CacheObject;
+	if (!FCoDAssetDatabase::Get().XSub_QueryValue(Key, CacheObject))
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%lld does not exist in the current package objects database."), Key);
 		return TArray<uint8>();
 	}
 
-	const FString XSubFilePath = FPaths::Combine(SharedGamePath, CacheObject->RelativePath);
-
-	TUniquePtr<FArchive> Reader(IFileManager::Get().CreateFileReader(*XSubFilePath, FILEREAD_Silent));
+	TUniquePtr<FArchive> Reader(IFileManager::Get().CreateFileReader(*CacheObject.Path, FILEREAD_Silent));
 	if (!Reader)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to open file: %s"), *CacheObject->RelativePath);
+		UE_LOG(LogTemp, Warning, TEXT("Failed to open file: %s"), *CacheObject.Path);
 		return TArray<uint8>();
 	}
 
@@ -216,8 +203,8 @@ TArray<uint8> FXSub::ExtractXSubPackage(uint64 Key, uint32 Size)
 	TArray<uint8> DecompressedData;
 	DecompressedData.AddUninitialized(BufferSize);
 
-	uint64 BlockPosition = CacheObject->Offset;
-	const uint64 BlockEnd = CacheObject->Offset + CacheObject->CompressedSize;
+	uint64 BlockPosition = CacheObject.Offset;
+	const uint64 BlockEnd = CacheObject.Offset + CacheObject.CompressedSize;
 
 	Reader->Seek(BlockPosition + 2);
 
@@ -228,8 +215,8 @@ TArray<uint8> FXSub::ExtractXSubPackage(uint64 Key, uint32 Size)
 	{
 		Reader->Seek(BlockPosition);
 		TArray<uint8> RawData;
-		RawData.SetNumUninitialized(CacheObject->CompressedSize);
-		Reader->Serialize(RawData.GetData(), CacheObject->CompressedSize);
+		RawData.SetNumUninitialized(CacheObject.CompressedSize);
+		Reader->Serialize(RawData.GetData(), CacheObject.CompressedSize);
 		return RawData;
 	}
 
@@ -319,7 +306,7 @@ void FXSub::RemoveInvalidEntries(const FString& RemovedFilePath)
 {
 	for (auto It = CacheObjects.CreateIterator(); It; ++It)
 	{
-		if (It.Value().RelativePath == RemovedFilePath)
+		if (It.Value().Path == RemovedFilePath)
 		{
 			It.RemoveCurrent();
 		}

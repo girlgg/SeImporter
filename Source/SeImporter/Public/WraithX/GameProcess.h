@@ -12,12 +12,15 @@
 #include <Psapi.h>
 #include <string>
 
-#include "AssetNameDB.h"
+#include "CoDAssetDatabase.h"
 #include "LocateGameInfo.h"
 #include "Windows/HideWindowsPlatformTypes.h"
 
 #include "SQLiteDatabase.h"
+#include "MapImporter/XSub.h"
 #include "WraithX/CoDAssetType.h"
+
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnOnAssetLoadingDelegate, float);
 
 struct FCoDAsset;
 
@@ -64,14 +67,27 @@ public:
 
 	template <typename T>
 	T ReadMemory(uint64 Address, bool bIsLocal = false);
+	/*!
+	 * @param Address 读取地址
+	 * @param OutArray 输出数组
+	 * @param Length 读取长度
+	 * @return 读取到的字节数
+	 */
+	uint64 ReadArray(uint64 Address, TArray<uint8>& OutArray, uint64 Length);
 	FString ReadFString(uint64 Address);
 
 	FORCEINLINE TArray<TSharedPtr<FCoDAsset>>& GetLoadedAssets() { return LoadedAssets; }
 
+	void LoadGameFromParasyte();
+
+	FOnOnAssetLoadingDelegate OnOnAssetLoadingDelegate;
+
+	FORCEINLINE CoDAssets::ESupportedGames GetCurrentGameType() const { return GameType; }
+
+	TSharedPtr<FXSub> GetDecrypt() { return XSubDecrypt; }
+
 private:
 	bool LocateGameInfo();
-
-	void LoadGameFromParasyte();
 
 	FXAsset64 RequestAsset(const uint64& AssetPtr);
 
@@ -91,6 +107,8 @@ private:
 	                         const TCHAR* AssetPrefix,
 	                         TFunction<void(const TAssetType&, TSharedPtr<TCoDType>)> Customizer);
 
+	void LoadingProgressAdd(float InAddProgress = 1e-6);
+
 	void LoadAssets();
 
 	DWORD GetProcessId();
@@ -108,6 +126,13 @@ private:
 
 	TArray<TSharedPtr<FCoDAsset>> LoadedAssets;
 	FCriticalSection LoadedAssetsLock;
+	FCriticalSection ProgressLock;
+
+	float CurrentLoadingProgress = 0.f;
+
+	TSharedPtr<FXSub> XSubDecrypt;
+
+	CoDAssets::ESupportedGames GameType{CoDAssets::ESupportedGames::None};
 };
 
 template <typename T>
@@ -144,7 +169,7 @@ void FGameProcess::ProcessGenericAsset(FXAsset64 AssetNode, const TCHAR* AssetPr
 	TAssetType Asset = ReadMemory<TAssetType>(AssetNode.Header);
 	Asset.Hash &= 0xFFFFFFFFFFFFFFF;
 
-	FAssetNameDB::Get().QueryValueAsync(
+	FCoDAssetDatabase::Get().QueryValueAsync(
 		Asset.Hash,
 		[this, Asset,Header = AssetNode.Header,Temp = AssetNode.Temp,
 			Prefix = FString(AssetPrefix),Customizer = MoveTemp(Customizer)](
@@ -168,5 +193,6 @@ void FGameProcess::ProcessGenericAsset(FXAsset64 AssetNode, const TCHAR* AssetPr
 
 			Customizer(Asset, LoadedAsset);
 			AddAssetToCollection(LoadedAsset);
+			LoadingProgressAdd();
 		});
 }

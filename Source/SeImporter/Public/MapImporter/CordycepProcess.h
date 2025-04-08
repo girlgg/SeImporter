@@ -82,7 +82,7 @@ protected:
 	bool IsSinglePlayer();
 
 public:
-	TUniquePtr<FXSub> XSubDecrypt{MakeUnique<FXSub>()};
+	// TUniquePtr<FXSub> XSubDecrypt{MakeUnique<FXSub>()};
 
 private:
 	void* ProcessHandle{nullptr};

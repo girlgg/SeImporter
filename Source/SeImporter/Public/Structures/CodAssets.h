@@ -5,27 +5,28 @@ namespace CoDAssets
 	enum class ESupportedGames : uint8
 	{
 		None,
-		WorldAtWar,
-		BlackOps,
-		BlackOps2,
-		BlackOps3,
-		BlackOps4,
-		BlackOpsCW,
-		ModernWarfare,
-		ModernWarfare2,
-		ModernWarfare3,
-		ModernWarfare4,
-		ModernWarfare5,
-		ModernWarfare6,
-		QuantumSolace,
-		ModernWarfareRemastered,
-		ModernWarfare2Remastered,
-		Ghosts,
-		InfiniteWarfare,
-		AdvancedWarfare,
-		WorldWar2,
-		Vanguard,
-		Parasyte,
+		WorldAtWar, // COD 5, IW 3.0
+		BlackOps, // COD 7, IW 3.0
+		BlackOps2, // COD 9, IW 3.0
+		BlackOps3, // COD 12, IW 3.0
+		BlackOps4, // COD 15, IW 3.0
+		BlackOpsCW, // COD 17, IW 8.0
+		BlackOps5, // COD 21, IW 9.0
+		ModernWarfare, // COD 4, IW 3.0
+		ModernWarfare2, // COD 6, IW 4.0 
+		ModernWarfare3, // COD 8, IW 5.0
+		ModernWarfare4, // COD 16, IW 8.0
+		ModernWarfare5, // COD 19, IW 9.0
+		ModernWarfare6, // COD 20, IW 9.0
+		QuantumSolace, // IW 3.0
+		ModernWarfareRemastered, // COD 4 2016重制版, IW 6.0
+		ModernWarfare2Remastered, // COD 6 2020重制版, IW 6.0
+		Ghosts, // COD 10, IW 6.0
+		InfiniteWarfare, // COD 13, IW 7.0
+		AdvancedWarfare, // COD 11, IW 6.0
+		WorldWar2, // COD 14, IW 7.0
+		Vanguard, // COD 18, IW 8.0
+		Parasyte, // DUMP工具
 	};
 
 	enum class ESupportedGameFlags : uint8

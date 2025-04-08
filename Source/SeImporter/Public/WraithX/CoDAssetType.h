@@ -182,11 +182,182 @@ struct FCoDSound : public FCoDAsset
 
 	// The datatype for this entry
 	FCoDSoundDataTypes DataType;
-	
+
 	virtual FText GetAssetTypeText() const
 	{
 		return LOCTEXT("AssetType", "Sound");
 	}
+};
+
+struct FWraithXModelSubmesh
+{
+	// Count of rigid vertex pairs
+	uint32 VertListcount;
+	// A pointer to rigid weights
+	uint64 RigidWeightsPtr;
+
+	// Count of verticies
+	uint32 VertexCount;
+	// Count of faces
+	uint32 FaceCount;
+	// Count of packed index tables
+	uint32 PackedIndexTableCount;
+
+	// Pointer to faces
+	uint64 FacesPtr;
+	// Pointer to verticies
+	uint64 VertexPtr;
+	// Pointer to verticies
+	uint64 VertexNormalsPtr;
+	// Pointer to UVs
+	uint64 VertexUVsPtr;
+	// Pointer to vertex colors
+	uint64 VertexColorPtr;
+	// Pointer to packed index table
+	uint64 PackedIndexTablePtr;
+	// Pointer to packed index buffer
+	uint64 PackedIndexBufferPtr;
+
+	// A list of weights
+	uint16 WeightCounts[8];
+	// A pointer to weight data
+	uint64 WeightsPtr;
+	// A pointer to blendshapes data
+	uint64 BlendShapesPtr;
+
+	// Submesh Scale
+	float Scale;
+
+	// Submesh Offset
+	float XOffset;
+	float YOffset;
+	float ZOffset;
+
+	// The index of the material
+	int32 MaterialIndex;
+};
+
+struct FWraithXMaterialSetting
+{
+	// The name
+	FString Name;
+	// The type
+	FString Type;
+	// The data
+	float Data[4];
+};
+
+enum class EImageUsageType : uint8
+{
+	Unknown,
+	DiffuseMap,
+	NormalMap,
+	SpecularMap,
+	GlossMap
+};
+
+struct FWraithXImage
+{
+	// The usage of this image asset
+	EImageUsageType ImageUsage;
+	// The pointer to the image asset
+	uint64 ImagePtr;
+
+	uint32 SemanticHash;
+
+	// The name of this image asset
+	FString ImageName;
+};
+
+struct FWraithXMaterial
+{
+	// The material name
+	FString MaterialName;
+	// The techset name
+	FString TechsetName;
+	// The surface type name
+	FString SurfaceTypeName;
+
+	// A list of images
+	TArray<FWraithXImage> Images;
+
+	// A list of settings, if any
+	TArray<FWraithXMaterialSetting> Settings;
+};
+
+struct FWraithXModelLod
+{
+	// Name of the LOD
+	FString Name;
+	// A list of submeshes for this specific lod
+	TArray<FWraithXModelSubmesh> Submeshes;
+	// A list of material info per-submesh
+	TArray<FWraithXMaterial> Materials;
+
+	// A key used for the lod data if it's streamed
+	uint64 LODStreamKey;
+	// A pointer used for the stream mesh info
+	uint64 LODStreamInfoPtr;
+
+	// The distance this lod displays at
+	float LodDistance;
+	// The max distance this lod displays at
+	float LodMaxDistance;
+};
+
+enum class EBoneDataTypes
+{
+	DivideBySize,
+	QuatPackingA,
+	HalfFloat
+};
+
+struct FWraithXModel
+{
+	// The name of the asset
+	FString ModelName;
+
+	// The type of data used for bone rotations
+	EBoneDataTypes BoneRotationData;
+
+	// Whether or not we use the stream mesh loader
+	bool IsModelStreamed;
+
+	// The model bone count
+	uint32 BoneCount;
+	// The model root bone count
+	uint32 RootBoneCount;
+	// The model cosmetic bone count
+	uint32 CosmeticBoneCount;
+	// The model blendshape count
+	uint32 BlendShapeCount;
+
+	// A pointer to bone name string indicies
+	uint64 BoneIDsPtr;
+	// The size of the bone name index
+	uint8 BoneIndexSize;
+
+	// A pointer to bone parent indicies
+	uint64 BoneParentsPtr;
+	// The size of the bone parent index
+	uint8 BoneParentSize;
+
+	// A pointer to local rotations
+	uint64 RotationsPtr;
+	// A pointer to local positions
+	uint64 TranslationsPtr;
+
+	// A pointer to global matricies
+	uint64 BaseMatriciesPtr;
+
+	// A pointer to the bone collision data, hitbox offsets
+	uint64 BoneInfoPtr;
+
+	// A pointer to the blendshape names
+	uint64 BlendShapeNamesPtr;
+
+	// A list of lods per this model
+	TArray<FWraithXModelLod> ModelLods;
 };
 
 #undef LOCTEXT_NAMESPACE

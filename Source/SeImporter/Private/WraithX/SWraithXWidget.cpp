@@ -1,14 +1,17 @@
 ﻿#include "WraithX/SWraithXWidget.h"
+
+#include "DesktopPlatformModule.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Input/SSearchBox.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "Widgets/Notifications/SProgressBar.h"
 
 void SWraithXWidget::Construct(const FArguments& InArgs)
 {
-	// 主垂直布局
 	ChildSlot
 	[
 		SNew(SVerticalBox)
 
-		// 顶部工具栏
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
@@ -19,6 +22,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 				SAssignNew(SearchBox, SSearchBox)
 				.HintText(INVTEXT("Search assets..."))
 				.OnTextChanged(this, &SWraithXWidget::HandleSearchChanged)
+				.IsEnabled_Lambda([this]() { return !bIsLoading; })
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
@@ -26,6 +30,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 				SNew(SButton)
 				.Text(INVTEXT("Search"))
 				.OnClicked(this, &SWraithXWidget::HandleSearchButton)
+				.IsEnabled_Lambda([this]() { return !bIsLoading; })
 			]
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
@@ -33,6 +38,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 				SNew(SButton)
 				.Text(INVTEXT("Clear"))
 				.OnClicked(this, &SWraithXWidget::HandleClearSearchText)
+				.IsEnabled_Lambda([this]() { return !bIsLoading; })
 			]
 			+ SHorizontalBox::Slot()
 			.FillWidth(0.3f)
@@ -52,13 +58,45 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 			+ SSplitter::Slot()
 			.Value(0.7f)
 			[
-				SAssignNew(ListView, SListView<TSharedPtr<FCoDAsset>>)
-				.ListItemsSource(&FilteredItems)
-				.OnGenerateRow(this, &SWraithXWidget::GenerateListRow)
-				.OnSelectionChanged(this, &SWraithXWidget::HandleSelectionChanged)
-				.OnMouseButtonDoubleClick(this, &SWraithXWidget::HandleDoubleClick)
-				.SelectionMode(ESelectionMode::Multi)
-				.ScrollbarVisibility(EVisibility::Visible)
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot()
+				.AutoHeight()
+				[
+					SAssignNew(HeaderRow, SHeaderRow)
+					+ SHeaderRow::Column(FName("AssetName"))
+					.DefaultLabel(INVTEXT("Asset Name"))
+					.FillWidth(0.4f)
+					.SortMode(this, &SWraithXWidget::GetSortMode, FName("AssetName"))
+					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
+
+					+ SHeaderRow::Column(FName("Status"))
+					.DefaultLabel(INVTEXT("Status"))
+					.FillWidth(0.2f)
+					.SortMode(this, &SWraithXWidget::GetSortMode, FName("Status"))
+					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
+
+					+ SHeaderRow::Column(FName("Type"))
+					.DefaultLabel(INVTEXT("Type"))
+					.FillWidth(0.2f)
+					.SortMode(this, &SWraithXWidget::GetSortMode, FName("Type"))
+					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
+
+					+ SHeaderRow::Column(FName("Size"))
+					.DefaultLabel(INVTEXT("Size"))
+					.FillWidth(0.2f)
+					.SortMode(this, &SWraithXWidget::GetSortMode, FName("Size"))
+					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
+				]
+				+ SVerticalBox::Slot()
+				[
+					SAssignNew(ListView, SListView<TSharedPtr<FCoDAsset>>)
+					.ListItemsSource(&FilteredItems)
+					.OnGenerateRow(this, &SWraithXWidget::GenerateListRow)
+					.OnSelectionChanged(this, &SWraithXWidget::HandleSelectionChanged)
+					.OnMouseButtonDoubleClick(this, &SWraithXWidget::HandleDoubleClick)
+					.SelectionMode(ESelectionMode::Multi)
+					.ScrollbarVisibility(EVisibility::Visible)
+				]
 			]
 
 			+ SSplitter::Slot()
@@ -85,14 +123,75 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 			[
 				SNew(SHorizontalBox)
 				+ SHorizontalBox::Slot()
+				.FillWidth(1.0f)
 				[
-					SAssignNew(ImportPathInput, SEditableTextBox)
-					.HintText(INVTEXT("Import Path"))
+					SNew(SHorizontalBox)
+					+ SHorizontalBox::Slot()
+					.FillWidth(1.0f)
+					[
+						SAssignNew(ImportPathInput, SEditableTextBox)
+						.HintText(INVTEXT("Import Path (e.g. /Game/Subfolder)"))
+						.IsEnabled_Lambda([this]() { return !bIsLoading; })
+						.OnTextCommitted_Lambda([this](const FText& InText, ETextCommit::Type CommitType)
+						{
+							FString Path = InText.ToString();
+							if (!Path.IsEmpty() && !Path.StartsWith("/Game/"))
+							{
+								FNotificationInfo Info(INVTEXT("路径必须以/Game/开头"));
+								Info.ExpireDuration = 3.0f;
+								FSlateNotificationManager::Get().AddNotification(Info);
+								ImportPathInput->SetText(FText::GetEmpty());
+							}
+						})
+					]
+					+ SHorizontalBox::Slot()
+					.AutoWidth()
+					.Padding(5.0f, 0.0f, 0.0f, 0.0f)
+					[
+						SNew(SButton)
+						.Text(INVTEXT("浏览..."))
+						.OnClicked_Lambda([this]()
+						{
+							IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
+							if (DesktopPlatform)
+							{
+								TSharedPtr<SWindow> ParentWindow = FSlateApplication::Get().FindWidgetWindow(
+									ImportPathInput.ToSharedRef());
+								void* ParentWindowHandle =
+									(ParentWindow.IsValid() && ParentWindow->GetNativeWindow().IsValid())
+										? ParentWindow->GetNativeWindow()->GetOSWindowHandle()
+										: nullptr;
+
+								FString SelectedPath;
+								if (DesktopPlatform->OpenDirectoryDialog(
+									ParentWindowHandle,
+									TEXT("选择导入目录"),
+									FPaths::ProjectContentDir(),
+									SelectedPath))
+								{
+									if (FPaths::MakePathRelativeTo(SelectedPath, *FPaths::ProjectContentDir()))
+									{
+										SelectedPath = FString(TEXT("/Game/")) + SelectedPath;
+										SelectedPath.RemoveFromEnd(TEXT("/"));
+										ImportPathInput->SetText(FText::FromString(SelectedPath));
+									}
+									else
+									{
+										FNotificationInfo Info(INVTEXT("必须选择项目Content目录下的文件夹"));
+										Info.ExpireDuration = 3.0f;
+										FSlateNotificationManager::Get().AddNotification(Info);
+									}
+								}
+							}
+							return FReply::Handled();
+						})
+					]
 				]
 				+ SHorizontalBox::Slot()
 				[
 					SAssignNew(OptionalParamsInput, SEditableTextBox)
 					.HintText(INVTEXT("Optional Parameters"))
+					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 			]
 
@@ -106,25 +205,43 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 					SNew(SButton)
 					.Text(INVTEXT("Load Game"))
 					.OnClicked(this, &SWraithXWidget::HandleLoadGame)
+					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 				+ SHorizontalBox::Slot()
 				[
 					SNew(SButton)
 					.Text(INVTEXT("Refresh File"))
 					.OnClicked(this, &SWraithXWidget::HandleRefreshGame)
+					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 				+ SHorizontalBox::Slot()
 				[
 					SNew(SButton)
 					.Text(INVTEXT("Import Selected"))
 					.OnClicked(this, &SWraithXWidget::HandleImportSelected)
+					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 				+ SHorizontalBox::Slot()
 				[
 					SNew(SButton)
 					.Text(INVTEXT("Import All"))
 					.OnClicked(this, &SWraithXWidget::HandleImportAll)
+					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
+			]
+		]
+
+		+ SVerticalBox::Slot()
+		.AutoHeight()
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.FillWidth(0.9f)
+			[
+				SAssignNew(LoadingIndicator, SProgressBar)
+				.Percent(0.0f)
+				.Visibility_Lambda([this]() { return bIsLoading ? EVisibility::Visible : EVisibility::Hidden; })
 			]
 		]
 	];
@@ -163,7 +280,6 @@ void SWraithXWidget::HandleSearchChanged(const FText& NewText)
 {
 	CurrentSearchText = NewText.ToString();
 
-	// 使用Async替代直接使用线程池
 	Async(EAsyncExecution::ThreadPool, [this]()
 	{
 		TArray<TSharedPtr<FCoDAsset>> LocalItems;
@@ -171,6 +287,8 @@ void SWraithXWidget::HandleSearchChanged(const FText& NewText)
 			FScopeLock Lock(&DataLock);
 			LocalItems = WraithX->GetLoadedAssets();
 		}
+
+		TotalAssetCount = LocalItems.Num();
 
 		TArray<TSharedPtr<FCoDAsset>> NewFiltered;
 		for (const auto& Item : LocalItems)
@@ -185,6 +303,7 @@ void SWraithXWidget::HandleSearchChanged(const FText& NewText)
 		{
 			FScopeLock Lock(&DataLock);
 			FilteredItems = NewFiltered;
+			SortData();
 			ListView->RequestListRefresh();
 			UpdateAssetCount();
 		});
@@ -193,8 +312,6 @@ void SWraithXWidget::HandleSearchChanged(const FText& NewText)
 
 bool SWraithXWidget::MatchSearchCondition(const TSharedPtr<FCoDAsset>& Item)
 {
-	// 实现基于表达式的搜索逻辑
-	// 示例支持简单的AND逻辑： "text1 text2" -> 同时包含text1和text2
 	TArray<FString> Tokens;
 	CurrentSearchText.ParseIntoArray(Tokens, TEXT(" "), true);
 
@@ -212,9 +329,10 @@ void SWraithXWidget::LoadInitialAssets()
 {
 	AsyncTask(ENamedThreads::GameThread, [this]()
 	{
-		HandleSearchChanged(FText::FromString(TEXT("")));
+		HandleSearchChanged(FText::FromString(CurrentSearchText));
 		UpdateAssetCount();
 		ListView->RequestListRefresh();
+		OnLoadCompleted();
 	});
 }
 
@@ -245,26 +363,38 @@ void SWraithXWidget::HandleSelectionChanged(TSharedPtr<FCoDAsset> Item, ESelectI
 
 FReply SWraithXWidget::HandleRefreshGame()
 {
-	FPlatformProcess::LaunchURL(
-		TEXT("com.yourengine.yourgame"),
-		nullptr,
-		nullptr);
+	bIsLoading = true;
+	LoadingIndicator->SetPercent(0.0f);
+
+	WraithX->RefreshGame();
+	WraithX->OnOnAssetInitCompletedDelegate.AddRaw(this, &SWraithXWidget::LoadInitialAssets);
+	WraithX->OnOnAssetLoadingDelegate.AddRaw(this, &SWraithXWidget::AddLoadingProgress);
 	return FReply::Handled();
 }
 
 FReply SWraithXWidget::HandleLoadGame()
 {
+	bIsLoading = true;
+	LoadingIndicator->SetPercent(0.0f);
+
 	WraithX->InitializeGame();
 	WraithX->OnOnAssetInitCompletedDelegate.AddRaw(this, &SWraithXWidget::LoadInitialAssets);
+	WraithX->OnOnAssetLoadingDelegate.AddRaw(this, &SWraithXWidget::AddLoadingProgress);
 	return FReply::Handled();
 }
 
 FReply SWraithXWidget::HandleImportSelected()
 {
 	TArray<TSharedPtr<FCoDAsset>> Selected = ListView->GetSelectedItems();
-	UE_LOG(LogTemp, Display, TEXT("Importing %d items to: %s"),
-	       Selected.Num(),
-	       *ImportPathInput->GetText().ToString());
+	FString ImportPath = ImportPathInput->GetText().ToString();
+	if (Selected.Num() > 0)
+	{
+		// TODO：重置底部进度条
+		// TODO：关闭所有操作
+		// TODO：导入信息与取消导入
+		// TODO：异步导入
+		WraithX->ImportSelection(ImportPath, Selected);
+	}
 	return FReply::Handled();
 }
 
@@ -282,4 +412,81 @@ void SWraithXWidget::UpdateAssetCount()
 		FText::Format(INVTEXT("Total: {0} | Filtered: {1}"),
 		              TotalAssetCount,
 		              FilteredItems.Num()));
+}
+
+void SWraithXWidget::OnLoadCompleted()
+{
+	bIsLoading = false;
+	LoadingIndicator->SetPercent(1.0f);
+}
+
+void SWraithXWidget::AddLoadingProgress(float InProgress)
+{
+	CurrentLoadingProgress += InProgress;
+	CurrentLoadingProgress = FMath::Min(CurrentLoadingProgress, 1.f);
+	LoadingIndicator->SetPercent(CurrentLoadingProgress);
+}
+
+void SWraithXWidget::OnSortColumnChanged(const EColumnSortPriority::Type SortPriority, const FName& ColumnId,
+                                         const EColumnSortMode::Type NewSortMode)
+{
+	if (CurrentSortColumn != ColumnId)
+	{
+		CurrentSortMode = EColumnSortMode::Ascending;
+	}
+	else
+	{
+		CurrentSortMode = (NewSortMode == EColumnSortMode::Ascending)
+			                  ? EColumnSortMode::Descending
+			                  : EColumnSortMode::Ascending;
+	}
+
+	CurrentSortColumn = ColumnId;
+	SortData();
+	ListView->RequestListRefresh();
+}
+
+EColumnSortMode::Type SWraithXWidget::GetSortMode(const FName ColumnId) const
+{
+	return (CurrentSortColumn == ColumnId) ? CurrentSortMode : EColumnSortMode::None;
+}
+
+void SWraithXWidget::SortData()
+{
+	if (CurrentSortColumn == FName("AssetName"))
+	{
+		FilteredItems.Sort([this](const TSharedPtr<FCoDAsset>& A, const TSharedPtr<FCoDAsset>& B)
+		{
+			return CurrentSortMode == EColumnSortMode::Ascending
+				       ? A->AssetName.Compare(B->AssetName) < 0
+				       : A->AssetName.Compare(B->AssetName) > 0;
+		});
+	}
+	else if (CurrentSortColumn == FName("Status"))
+	{
+		FilteredItems.Sort([this](const TSharedPtr<FCoDAsset>& A, const TSharedPtr<FCoDAsset>& B)
+		{
+			return CurrentSortMode == EColumnSortMode::Ascending
+				       ? A->GetAssetStatusText().CompareTo(B->GetAssetStatusText()) < 0
+				       : A->GetAssetStatusText().CompareTo(B->GetAssetStatusText()) > 0;
+		});
+	}
+	else if (CurrentSortColumn == FName("Type"))
+	{
+		FilteredItems.Sort([this](const TSharedPtr<FCoDAsset>& A, const TSharedPtr<FCoDAsset>& B)
+		{
+			return CurrentSortMode == EColumnSortMode::Ascending
+				       ? A->GetAssetTypeText().CompareTo(B->GetAssetTypeText()) < 0
+				       : A->GetAssetTypeText().CompareTo(B->GetAssetTypeText()) > 0;
+		});
+	}
+	else if (CurrentSortColumn == FName("Size"))
+	{
+		FilteredItems.Sort([this](const TSharedPtr<FCoDAsset>& A, const TSharedPtr<FCoDAsset>& B)
+		{
+			return CurrentSortMode == EColumnSortMode::Ascending
+				       ? A->AssetSize < B->AssetSize
+				       : A->AssetSize > B->AssetSize;
+		});
+	}
 }

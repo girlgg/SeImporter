@@ -43,7 +43,7 @@ void FCordycepProcess::Initialize()
 		}
 	}
 	// FCASCPackage::LoadFiles(GameDirectory);
-	XSubDecrypt->LoadFilesAsync(GameDirectory);
+	// XSubDecrypt->LoadFilesAsync(GameDirectory);
 	if (GameID == "YAMYAMOK")
 	{
 		if (IsSinglePlayer())

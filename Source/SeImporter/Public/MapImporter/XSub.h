@@ -14,17 +14,18 @@ struct FXSubBlock
 
 struct FXSubPackageCacheObject
 {
+	int64 FileId;
 	uint64 Offset;
 	uint64 CompressedSize;
 	uint64 UncompressedSize;
-	FString RelativePath;
+	FString Path;
 
 	friend FArchive& operator<<(FArchive& Ar, FXSubPackageCacheObject& Obj)
 	{
 		Ar << Obj.Offset;
 		Ar << Obj.CompressedSize;
 		Ar << Obj.UncompressedSize;
-		Ar << Obj.RelativePath;
+		Ar << Obj.Path;
 		return Ar;
 	}
 };
@@ -58,7 +59,8 @@ public:
 		}
 	};
 
-	void LoadFilesAsync(const FString& GamePath);
+	FXSub(uint64 GameID, const FString& GamePath);
+
 	void LoadFiles();
 	void ReadXSub(FLargeMemoryReader& Reader, const FString& FilePath, int32 FileIndex,
 	              TMap<uint64, FXSubPackageCacheObject>& LocalCache);

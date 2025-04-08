@@ -1,7 +1,7 @@
 ﻿#include "WraithX/GameProcess.h"
 
 #include "Structures/MW6GameStructures.h"
-#include "WraithX/AssetNameDB.h"
+#include "WraithX/CoDAssetDatabase.h"
 #include "WraithX/LocateGameInfo.h"
 
 FGameProcess::FGameProcess()
@@ -9,15 +9,19 @@ FGameProcess::FGameProcess()
 	ProcessId = GetProcessId();
 	ProcessHandle = OpenTargetProcess();
 	ProcessPath = GetProcessPath();
-	FAssetNameDB::Get().Initialize();
 
-	if (LocateGameInfo())
+	LoadingProgressAdd(0.1f);
+
+	AsyncTask(ENamedThreads::GameThread, [this]()
 	{
-		if (ParasyteBaseState.IsValid() && ParasyteBaseState->GameID != 0)
+		if (LocateGameInfo())
 		{
-			LoadGameFromParasyte();
+			if (ParasyteBaseState.IsValid() && ParasyteBaseState->GameID != 0)
+			{
+				LoadGameFromParasyte();
+			}
 		}
-	}
+	});
 }
 
 FGameProcess::~FGameProcess()
@@ -25,7 +29,7 @@ FGameProcess::~FGameProcess()
 	if (ProcessHandle)
 		CloseHandle(ProcessHandle);
 	ProcessHandle = nullptr;
-	FAssetNameDB::Get().Shutdown();
+	FCoDAssetDatabase::Get().Shutdown();
 }
 
 bool FGameProcess::IsRunning()
@@ -41,6 +45,23 @@ bool FGameProcess::IsRunning()
 		return Result == WAIT_TIMEOUT;
 	}
 	return false;
+}
+
+
+uint64 FGameProcess::ReadArray(uint64 Address, TArray<uint8>& OutArray, uint64 Length)
+{
+	uint64 ReadSize = 0;
+	static FCriticalSection ProcessHandleCriticalSection;
+	FScopeLock Lock(&ProcessHandleCriticalSection);
+
+	OutArray.SetNum(Length);
+
+	if (ProcessHandle)
+	{
+		ReadProcessMemory(ProcessHandle, reinterpret_cast<LPCVOID>(Address), OutArray.GetData(), Length, &ReadSize);
+		assert(BytesRead == sizeof(T));
+	}
+	return ReadSize;
 }
 
 FString FGameProcess::ReadFString(uint64 Address)
@@ -80,6 +101,8 @@ void FGameProcess::LoadGameFromParasyte()
 	{
 	// Modern Warfare 3 (2023)
 	case 0x4B4F4D41594D4159:
+		GameType = CoDAssets::ESupportedGames::ModernWarfare6;
+		XSubDecrypt = MakeShared<FXSub>(ParasyteBaseState->GameID, ParasyteBaseState->GameDirectory);
 		LoadAssets();
 		break;
 	}
@@ -130,6 +153,7 @@ void FGameProcess::ProcessModelAsset(FXAsset64 AssetNode)
 	auto CreateModel = [&](const FString& ModelName)
 	{
 		TSharedPtr<FCoDModel> LoadedModel = MakeShared<FCoDModel>();
+		LoadedModel->AssetType = EWraithAssetType::Model;
 		LoadedModel->AssetName = ModelName;
 		LoadedModel->AssetPointer = AssetNode.Header;
 		LoadedModel->BoneCount = (Model.ParentListPtr > 0) * (Model.NumBones + Model.UnkBoneCount);
@@ -147,7 +171,7 @@ void FGameProcess::ProcessModelAsset(FXAsset64 AssetNode)
 	}
 	else
 	{
-		FAssetNameDB::Get().QueryValueAsync(Model.Hash, [=](const FString& QueryName)
+		FCoDAssetDatabase::Get().QueryValueAsync(Model.Hash, [=](const FString& QueryName)
 		{
 			CreateModel(QueryName.IsEmpty()
 				            ? FString::Printf(TEXT("xmodel_%llx"), Model.Hash)
@@ -161,6 +185,7 @@ void FGameProcess::ProcessImageAsset(FXAsset64 AssetNode)
 	ProcessGenericAsset<FMW6GfxImage, FCoDImage>(AssetNode, TEXT("ximage"),
 	                                             [](auto& Image, auto LoadedImage)
 	                                             {
+		                                             LoadedImage->AssetType = EWraithAssetType::Image;
 		                                             LoadedImage->Width = Image.Width;
 		                                             LoadedImage->Height = Image.Height;
 		                                             LoadedImage->Format = Image.ImageFormat;
@@ -173,6 +198,7 @@ void FGameProcess::ProcessAnimAsset(FXAsset64 AssetNode)
 	ProcessGenericAsset<FMW6XAnim, FCoDAnim>(AssetNode, TEXT("xanim"),
 	                                         [](auto& Anim, auto LoadedAnim)
 	                                         {
+		                                         LoadedAnim->AssetType = EWraithAssetType::Animation;
 		                                         LoadedAnim->Framerate = Anim.Framerate;
 		                                         LoadedAnim->FrameCount = Anim.FrameCount;
 		                                         LoadedAnim->BoneCount = Anim.TotalBoneCount;
@@ -184,6 +210,7 @@ void FGameProcess::ProcessMaterialAsset(FXAsset64 AssetNode)
 	ProcessGenericAsset<FMW6Material, FCoDMaterial>(AssetNode, TEXT("xmaterial"),
 	                                                [](auto& Material, auto LoadedMaterial)
 	                                                {
+		                                                LoadedMaterial->AssetType = EWraithAssetType::Material;
 		                                                LoadedMaterial->ImageCount = Material.ImageCount;
 	                                                });
 }
@@ -194,6 +221,7 @@ void FGameProcess::ProcessSoundAsset(FXAsset64 AssetNode)
 	                                               [](auto& SoundAsset, auto LoadedSound)
 	                                               {
 		                                               LoadedSound->FullName = LoadedSound->AssetName;
+		                                               LoadedSound->AssetType = EWraithAssetType::Sound;
 		                                               LoadedSound->AssetName = FPaths::GetBaseFilename(
 			                                               LoadedSound->AssetName);
 		                                               int32 DotIndex = LoadedSound->AssetName.Find(TEXT("."));
@@ -216,8 +244,30 @@ void FGameProcess::ProcessSoundAsset(FXAsset64 AssetNode)
 
 void FGameProcess::AddAssetToCollection(TSharedPtr<FCoDAsset> Asset)
 {
-	FScopeLock Lock(&LoadedAssetsLock);
-	LoadedAssets.Add(MoveTemp(Asset));
+	if (&LoadedAssetsLock)
+	{
+		FScopeLock Lock(&LoadedAssetsLock);
+		LoadedAssets.Add(MoveTemp(Asset));
+	}
+}
+
+void FGameProcess::LoadingProgressAdd(float InAddProgress)
+{
+	FScopeLock Lock(&ProgressLock);
+
+	CurrentLoadingProgress += InAddProgress;
+	if (CurrentLoadingProgress > 0.01f)
+	{
+		float ProgressToSend = CurrentLoadingProgress;
+		CurrentLoadingProgress = 0;
+		AsyncTask(ENamedThreads::GameThread, [ProgressToSend, this]
+		{
+			if (this)
+			{
+				OnOnAssetLoadingDelegate.Broadcast(ProgressToSend);
+			}
+		});
+	}
 }
 
 void FGameProcess::LoadAssets()
@@ -236,9 +286,10 @@ void FGameProcess::LoadAssets()
 		{0xc1, [this](FXAsset64 AssetNode) { ProcessSoundAsset(AssetNode); }}
 	};
 
-	for (const auto& PoolInfo : AssetPools)
+	for (int32 PoolIdx = 0; PoolIdx < AssetPools.Num(); ++PoolIdx)
 	{
-		ProcessAssetPool(PoolInfo.Offset, PoolInfo.Processor);
+		const auto& [Offset, Processor] = AssetPools[PoolIdx];
+		ProcessAssetPool(Offset, Processor);
 	}
 }
 

@@ -83,9 +83,8 @@ void UCastAssetFactory::HandleMaterialImport(FString&& ParentPath, const FString
 }
 
 UObject* UCastAssetFactory::ExecuteImportProcess(UObject* InParent, FName InName, EObjectFlags Flags,
-                                                 const FString& InFilename,
-                                                 FCastImporter* CastImporter, FCastImportOptions* ImportOptions,
-                                                 FString InCurrentFilename)
+                                                 const FString& InFilename, FCastImporter* CastImporter,
+                                                 FCastImportOptions* ImportOptions, FString InCurrentFilename)
 {
 	UObject* CreatedObject = nullptr;
 	if (!CastImporter->ImportFromFile(InCurrentFilename))

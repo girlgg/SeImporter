@@ -390,14 +390,14 @@ private:
 			}
 			else
 			{
-				Process->XSubDecrypt->AccessCache([&](const TMap<uint64, FXSubPackageCacheObject>& Cache)
+				/*Process->XSubDecrypt->AccessCache([&](const TMap<uint64, FXSubPackageCacheObject>& Cache)
 				{
 					if (Cache.Contains(PakKey))
 					{
 						TArray<uint8> Buffer = Process->XSubDecrypt->ExtractXSubPackage(PakKey, Shared.DataSize);
 						XModelInfo = ReadXModelMeshes(XModel, reinterpret_cast<uint64>(Buffer.GetData()), true);
 					}
-				});
+				});*/
 			}
 			/*else if (Shared.data == 0 && CASCPackage.Assets.ContainsKey(pakKey))
 			{

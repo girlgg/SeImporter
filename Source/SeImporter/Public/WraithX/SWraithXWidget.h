@@ -2,6 +2,8 @@
 #include "CoDAssetType.h"
 #include "WraithX.h"
 
+class SProgressBar;
+
 class SWraithXPreviewWindow final : public SWindow
 {
 public:
@@ -146,6 +148,13 @@ private:
 	FReply HandleImportSelected();
 	FReply HandleImportAll();
 	void UpdateAssetCount();
+	void OnLoadCompleted();
+
+	void AddLoadingProgress(float InProgress);
+
+	void OnSortColumnChanged(const EColumnSortPriority::Type SortPriority, const FName& ColumnId, const EColumnSortMode::Type NewSortMode);
+	EColumnSortMode::Type GetSortMode(const FName ColumnId) const;
+	void SortData();
 
 private:
 	// 数据源
@@ -157,14 +166,21 @@ private:
 	TSharedPtr<STextBlock> AssetCountText;
 	TSharedPtr<SEditableTextBox> ImportPathInput;
 	TSharedPtr<SEditableTextBox> OptionalParamsInput;
+	TSharedPtr<SProgressBar> LoadingIndicator;
 
 	// 搜索处理
 	FString CurrentSearchText;
 	FThreadSafeBool bSearchRequested = false;
 
-private:
+	TSharedPtr<SHeaderRow> HeaderRow;
+	FName CurrentSortColumn;
+	EColumnSortMode::Type CurrentSortMode = EColumnSortMode::None;
+
 	int32 TotalAssetCount = 0;
 	FCriticalSection DataLock;
 
 	TUniquePtr<FWraithX> WraithX = MakeUnique<FWraithX>();
+
+	float CurrentLoadingProgress = 0.f;
+	bool bIsLoading = false;
 };

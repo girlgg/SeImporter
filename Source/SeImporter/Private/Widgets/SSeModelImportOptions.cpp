@@ -199,3 +199,5 @@ FReply SSeModelImportOptions::HandleImport()
 }
 
 END_SLATE_FUNCTION_BUILD_OPTIMIZATION
+
+#undef LOCTEXT_NAMESPACE
