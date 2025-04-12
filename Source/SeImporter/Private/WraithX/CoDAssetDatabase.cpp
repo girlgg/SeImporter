@@ -34,15 +34,16 @@ void FCoDAssetDatabase::Initialize()
 		{
 			CreateTables();
 
-			Database.Execute(TEXT("PRAGMA journal_mode=WAL;"));
-			Database.Execute(TEXT("PRAGMA synchronous=NORMAL;"));
+			Database.Execute(TEXT("PRAGMA journal_mode = WAL;")); // 更高的读性能
+			Database.Execute(TEXT("PRAGMA synchronous = OFF;")); // 更快写入（非断电安全）
+			Database.Execute(TEXT("PRAGMA cache_size = -10000;")); // 使用更多内存缓存（单位页，负号代表KB）
+			Database.Execute(TEXT("PRAGMA temp_store = MEMORY;")); // 中间结果存在内存中
+			Database.Execute(TEXT("PRAGMA locking_mode = NORMAL;")); // 正常锁机制，适合只读多次
+
 			bIsRunning = true;
 
 			// 启动异步工作线程
 			AsyncWorker = MakeUnique<FCoDAssetDBWorker>(*this);
-
-			// Database.Execute(
-			// 	TEXT("CREATE INDEX IF NOT EXISTS IDX_AssetHashFiles_RelativePath ON AssetHashFiles(Path);"));
 
 			// 处理文件追踪
 			ProcessTrackedFiles();
@@ -143,7 +144,6 @@ bool FCoDAssetDatabase::AssetName_BatchInsertOrUpdate(const TMap<uint64, FString
 
 bool FCoDAssetDatabase::AssetName_QueryValue(uint64 Hash, FString& OutValue)
 {
-	// 对于同步查询，仍然使用主数据库连接
 	return ExecuteStatement(
 		TEXT("SELECT Value FROM AssetNameCache WHERE Hash = ?;"),
 		[Hash, &OutValue](FSQLitePreparedStatement& Stmt)
@@ -157,6 +157,16 @@ bool FCoDAssetDatabase::AssetName_QueryValue(uint64 Hash, FString& OutValue)
 			return false;
 		}
 	);
+}
+
+void FCoDAssetDatabase::AssetName_QueryValueRetName(uint64 Hash, FString& OutValue, const FString& NamePrefix)
+{
+	Hash &= 0xFFFFFFFFFFFFFFF;
+
+	if (!AssetName_QueryValue(Hash, OutValue))
+	{
+		OutValue = FString::Printf(TEXT("%s_%llx"), *NamePrefix, Hash);
+	}
 }
 
 bool FCoDAssetDatabase::AssetName_DeleteByHash(uint64 Hash)
@@ -349,8 +359,9 @@ void FCoDAssetDatabase::ProcessTrackedFiles()
 			int64 ExistingLastModifiedTime = 0;
 
 			int64 FileId;
-			bool bNeedsUpdate = CheckIfFileNeedsUpdate(1, RelativePath, ContentHash, LastModifiedTime, ExistingContentHash,
-													   ExistingLastModifiedTime, FileId);
+			bool bNeedsUpdate = CheckIfFileNeedsUpdate(1, RelativePath, ContentHash, LastModifiedTime,
+			                                           ExistingContentHash,
+			                                           ExistingLastModifiedTime, FileId);
 			if (bNeedsUpdate)
 			{
 				TMap<uint64, FString> Items;
@@ -390,7 +401,7 @@ void FCoDAssetDatabase::ProcessTrackedFiles()
 			int64 FileId;
 
 			bool bNeedsUpdate = CheckIfFileNeedsUpdate(CoDGameHash, RelativePath, ContentHash, LastModifiedTime,
-													   ExistingContentHash, ExistingLastModifiedTime, FileId);
+			                                           ExistingContentHash, ExistingLastModifiedTime, FileId);
 			if (bNeedsUpdate)
 			{
 				TMap<uint64, FXSubPackageCacheObject> Items;
@@ -676,7 +687,7 @@ void FCoDAssetDatabase::ParseXSubFile(const FString& FilePath, TMap<uint64, FXSu
 		}
 
 		CacheObject.FileId = FileId;
-		
+
 		Reader.Seek(OriginalPos);
 		Items.Emplace(Key, CacheObject);
 	}
@@ -700,7 +711,8 @@ bool FCoDAssetDatabase::UpdateTrackedWniFile(int64 FileId, const FString& Relati
 	);
 }
 
-bool FCoDAssetDatabase::UpdateTrackedXSubFile(int64 FileId, uint64 GameID, const FString& RelativePath, uint64 ContentHash,
+bool FCoDAssetDatabase::UpdateTrackedXSubFile(int64 FileId, uint64 GameID, const FString& RelativePath,
+                                              uint64 ContentHash,
                                               int64 LastModifiedTime)
 {
 	return ExecuteStatement(

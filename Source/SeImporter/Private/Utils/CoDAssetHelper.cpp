@@ -3,7 +3,10 @@
 #include "AssetToolsModule.h"
 #include "IAssetTools.h"
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "CastManager/CastModel.h"
 #include "UObject/SavePackage.h"
+#include "WraithX/CoDAssetType.h"
+#include "WraithX/GameProcess.h"
 
 UTexture2D* FCoDAssetHelper::CreateTextureFromDDSData(const TArray<uint8>& ImageDataArray, int32 Width, int32 Height,
                                                       uint8 ImageFormat, const FString& TextureName)
@@ -148,5 +151,66 @@ bool FCoDAssetHelper::SaveObjectToPackage(UObject* ObjectToSave, const FString& 
 		return true;
 	}
 	UE_LOG(LogTemp, Error, TEXT("Failed to save package: %s"), *FilePath);
+	return false;
+}
+
+uint8 FCoDMeshHelper::FindFaceIndex(TSharedPtr<FGameProcess> ProcessInstance, uint64 PackedIndices, uint32 Index,
+                                    uint8 Bits, bool IsLocal)
+{
+	unsigned long BitIndex;
+
+	if (!_BitScanReverse64(&BitIndex, Bits)) BitIndex = 64;
+	else BitIndex ^= 0x3F;
+
+	const uint16 Offset = Index * (64 - BitIndex);
+	const uint8 BitCount = 64 - BitIndex;
+	const uint64 PackedIndicesPtr = PackedIndices + (Offset >> 3);
+	const uint8 BitOffset = Offset & 7;
+
+	const uint8 PackedIndice = ProcessInstance->ReadMemory<uint8>(PackedIndicesPtr, IsLocal);
+
+	if (BitOffset == 0)
+		return PackedIndice & ((1 << BitCount) - 1);
+
+	if (8 - BitOffset < BitCount)
+	{
+		const uint8 nextPackedIndice = ProcessInstance->ReadMemory<uint8>(PackedIndicesPtr + 1, IsLocal);
+		return (PackedIndice >> BitOffset) & ((1 << (8 - BitOffset)) - 1) | ((nextPackedIndice & ((1 << (64 -
+			BitIndex - (8 - BitOffset))) - 1)) << (8 - BitOffset));
+	}
+
+	return (PackedIndice >> BitOffset) & ((1 << BitCount) - 1);
+}
+
+bool FCoDMeshHelper::UnpackFaceIndices(TSharedPtr<FGameProcess> ProcessInstance, TArray<uint16>& InFacesArr,
+                                       uint64 Tables, uint64 TableCount, uint64 PackedIndices, uint64 Indices,
+                                       uint64 FaceIndex, const bool IsLocal)
+{
+	InFacesArr.SetNum(3);
+	uint64 CurrentFaceIndex = FaceIndex;
+	for (int i = 0; i < TableCount; i++)
+	{
+		uint64 TablePtr = Tables + (i * 40);
+		uint64 IndicesPtr = PackedIndices + ProcessInstance->ReadMemory<uint32>(TablePtr + 36, IsLocal);
+		uint8 Count = ProcessInstance->ReadMemory<uint8>(TablePtr + 35, IsLocal);
+		if (CurrentFaceIndex < Count)
+		{
+			uint8 Bits = (uint8)(ProcessInstance->ReadMemory<uint8>(TablePtr + 34, IsLocal) - 1);
+			FaceIndex = ProcessInstance->ReadMemory<uint32>(TablePtr + 28, IsLocal);
+
+			uint32 Face1Offset = FindFaceIndex(ProcessInstance, IndicesPtr, CurrentFaceIndex * 3 + 0, Bits, IsLocal) +
+				FaceIndex;
+			uint32 Face2Offset = FindFaceIndex(ProcessInstance, IndicesPtr, CurrentFaceIndex * 3 + 1, Bits, IsLocal) +
+				FaceIndex;
+			uint32 Face3Offset = FindFaceIndex(ProcessInstance, IndicesPtr, CurrentFaceIndex * 3 + 2, Bits, IsLocal) +
+				FaceIndex;
+
+			InFacesArr[0] = ProcessInstance->ReadMemory<uint16>(Indices + Face1Offset * 2, IsLocal);
+			InFacesArr[1] = ProcessInstance->ReadMemory<uint16>(Indices + Face2Offset * 2, IsLocal);
+			InFacesArr[2] = ProcessInstance->ReadMemory<uint16>(Indices + Face3Offset * 2, IsLocal);
+			return true;
+		}
+		CurrentFaceIndex -= Count;
+	}
 	return false;
 }

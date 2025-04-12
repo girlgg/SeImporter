@@ -32,6 +32,13 @@ public:
 	virtual uint64 GetIndexDataOffset(const FMW6XSurface& Surface) override;
 	virtual uint64 GetPackedIndicesOffset(const FMW6XSurface& Surface) override;
 
-	static uint8 ReadXImage(TSharedPtr<FGameProcess> ProcessInstance, TSharedPtr<FCoDImage> ImageAddr, TArray<uint8>& ImageDataArray);
-	static void ReadXModel(TSharedPtr<FGameProcess> ProcessInstance, TSharedPtr<FCoDModel> ModelAddr);
+	static uint8 ReadXImage(TSharedPtr<FGameProcess> ProcessInstance, TSharedPtr<FCoDImage> ImageAddr,
+	                        TArray<uint8>& ImageDataArray);
+	static bool ReadXModel(FWraithXModel& OutModel, TSharedPtr<FGameProcess> ProcessInstance,
+	                       TSharedPtr<FCoDModel> ModelAddr);
+	static bool ReadXMaterial(FWraithXMaterial& OutMaterial, TSharedPtr<FGameProcess> ProcessInstance,
+	                          uint64 MaterialHandle);
+
+	static void LoadXModel(TSharedPtr<FGameProcess> ProcessInstance, FWraithXModel& BaseModel,
+	                       FWraithXModelLod& ModelLod, FCastModelInfo& ResultModel);
 };

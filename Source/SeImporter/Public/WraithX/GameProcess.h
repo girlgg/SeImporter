@@ -73,7 +73,8 @@ public:
 	 * @param Length 读取长度
 	 * @return 读取到的字节数
 	 */
-	uint64 ReadArray(uint64 Address, TArray<uint8>& OutArray, uint64 Length);
+	template <typename T>
+	uint64 ReadArray(uint64 Address, TArray<T>& OutArray, uint64 Length);
 	FString ReadFString(uint64 Address);
 
 	FORCEINLINE TArray<TSharedPtr<FCoDAsset>>& GetLoadedAssets() { return LoadedAssets; }
@@ -83,6 +84,7 @@ public:
 	FOnOnAssetLoadingDelegate OnOnAssetLoadingDelegate;
 
 	FORCEINLINE CoDAssets::ESupportedGames GetCurrentGameType() const { return GameType; }
+	FORCEINLINE CoDAssets::ESupportedGameFlags GetCurrentGameFlag() const { return GameFlag; }
 
 	TSharedPtr<FXSub> GetDecrypt() { return XSubDecrypt; }
 
@@ -132,7 +134,8 @@ private:
 
 	TSharedPtr<FXSub> XSubDecrypt;
 
-	CoDAssets::ESupportedGames GameType{CoDAssets::ESupportedGames::None};
+	CoDAssets::ESupportedGames GameType = CoDAssets::ESupportedGames::None;
+	CoDAssets::ESupportedGameFlags GameFlag = CoDAssets::ESupportedGameFlags::None;
 };
 
 template <typename T>
@@ -160,6 +163,26 @@ T FGameProcess::ReadMemory(uint64 Address, bool bIsLocal)
 		}
 	}
 	return Result;
+}
+
+template <typename T>
+uint64 FGameProcess::ReadArray(uint64 Address, TArray<T>& OutArray, uint64 Length)
+{
+	uint64 ReadSize = 0;
+	static FCriticalSection ProcessHandleCriticalSection;
+	FScopeLock Lock(&ProcessHandleCriticalSection);
+
+	OutArray.SetNumUninitialized(Length);
+
+	if (ProcessHandle)
+	{
+		uint64 TotalBytesToRead = Length * sizeof(T);
+
+		ReadProcessMemory(ProcessHandle, reinterpret_cast<LPCVOID>(Address), OutArray.GetData(), TotalBytesToRead,
+		                  &ReadSize);
+		assert(ReadSize == TotalBytesToRead);
+	}
+	return ReadSize;
 }
 
 template <typename TAssetType, typename TCoDType>

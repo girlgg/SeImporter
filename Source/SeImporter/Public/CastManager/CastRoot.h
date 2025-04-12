@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+struct FCastModelLod;
 struct FCastAnimationInfo;
 struct FCastModelInfo;
 
@@ -23,6 +24,7 @@ struct FCastRoot
 {
 public:
 	TArray<FCastModelInfo> Models;
+	TArray<FCastModelLod> ModelLodInfo;
 	TArray<FCastAnimationInfo> Animations;
 	TArray<FCastInstanceInfo> Instances;
 	TArray<FCastMetadataInfo> Metadata;

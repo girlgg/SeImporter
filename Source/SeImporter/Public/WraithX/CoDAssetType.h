@@ -204,24 +204,24 @@ struct FWraithXModelSubmesh
 	uint32 PackedIndexTableCount;
 
 	// Pointer to faces
-	uint64 FacesPtr;
+	uint64 FacesOffset;
 	// Pointer to verticies
-	uint64 VertexPtr;
+	uint64 VertexOffset;
 	// Pointer to verticies
-	uint64 VertexNormalsPtr;
+	uint64 VertexTangentOffset;
 	// Pointer to UVs
-	uint64 VertexUVsPtr;
+	uint64 VertexUVsOffset;
 	// Pointer to vertex colors
-	uint64 VertexColorPtr;
+	uint64 VertexColorOffset;
 	// Pointer to packed index table
-	uint64 PackedIndexTablePtr;
+	uint64 PackedIndexTableOffset;
 	// Pointer to packed index buffer
-	uint64 PackedIndexBufferPtr;
+	uint64 PackedIndexBufferOffset;
 
 	// A list of weights
 	uint16 WeightCounts[8];
 	// A pointer to weight data
-	uint64 WeightsPtr;
+	uint64 WeightsOffset;
 	// A pointer to blendshapes data
 	uint64 BlendShapesPtr;
 
@@ -348,7 +348,7 @@ struct FWraithXModel
 	uint64 TranslationsPtr;
 
 	// A pointer to global matricies
-	uint64 BaseMatriciesPtr;
+	uint64 BaseTransformPtr;
 
 	// A pointer to the bone collision data, hitbox offsets
 	uint64 BoneInfoPtr;
@@ -358,6 +358,14 @@ struct FWraithXModel
 
 	// A list of lods per this model
 	TArray<FWraithXModelLod> ModelLods;
+};
+
+// 骨骼位置信息
+struct FCastBoneTransform
+{
+	FVector4f Rotation;       // 16 bytes (x, y, z, w)
+	FVector3f Translation;    // 12 bytes (x, y, z)
+	float TranslationWeight; // 4 bytes
 };
 
 #undef LOCTEXT_NAMESPACE

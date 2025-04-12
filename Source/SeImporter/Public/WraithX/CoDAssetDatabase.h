@@ -27,6 +27,7 @@ public:
 	bool AssetName_InsertOrUpdate(uint64 Hash, const FString& Value);
 	bool AssetName_BatchInsertOrUpdate(const TMap<uint64, FString>& Items);
 	bool AssetName_QueryValue(uint64 Hash, FString& OutValue);
+	void AssetName_QueryValueRetName(uint64 Hash, FString& OutValue, const FString& NamePrefix = TEXT(""));
 	bool AssetName_DeleteByHash(uint64 Hash);
 
 	bool XSub_BatchInsertOrUpdate(const TMap<uint64, FXSubPackageCacheObject>& Items);

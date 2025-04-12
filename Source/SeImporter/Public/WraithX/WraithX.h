@@ -4,6 +4,7 @@
 #include "CoDAssetType.h"
 #include "GameProcess.h"
 
+struct FCastModelInfo;
 DECLARE_MULTICAST_DELEGATE(FOnOnAssetInitCompletedDelegate);
 
 class FGameProcess;
@@ -23,6 +24,9 @@ public:
 	// void ImportMaterial(TSharedPtr<FCoDAsset> Asset);
 	// void ImportRawFile(TSharedPtr<FCoDAsset> Asset);
 	void ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>> Selection);
+
+	void LoadGenericModelAsset(FWraithXModel& OutModel, TSharedPtr<FCoDModel> ModelInfo);
+	void TranslateXModel(FCastModelInfo& OutModel, FWraithXModel& InModel, int32 LodIdx);
 
 	FOnOnAssetInitCompletedDelegate OnOnAssetInitCompletedDelegate;
 	FOnOnAssetLoadingDelegate OnOnAssetLoadingDelegate;

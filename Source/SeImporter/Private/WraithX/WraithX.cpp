@@ -1,5 +1,6 @@
 ﻿#include "WraithX/WraithX.h"
 
+#include "CastManager/CastRoot.h"
 #include "GameInfo/ModernWarfare6.h"
 #include "Utils/CoDAssetHelper.h"
 #include "WraithX/GameProcess.h"
@@ -27,16 +28,40 @@ void FWraithX::RefreshGame()
 void FWraithX::ImportModel(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
 {
 	TSharedPtr<FCoDModel> ModelInfo = StaticCastSharedPtr<FCoDModel>(Asset);
-	switch (ProcessInstance->GetCurrentGameType())
+	FWraithXModel GenericModel;
+	LoadGenericModelAsset(GenericModel, ModelInfo);
+
+	// 准备材质
+	for (FWraithXModelLod& LodModel : GenericModel.ModelLods)
 	{
-	case CoDAssets::ESupportedGames::ModernWarfare5:
-		break;
-	case CoDAssets::ESupportedGames::ModernWarfare6:
-		FModernWarfare6::ReadXModel(ProcessInstance, ModelInfo);
-		break;
-	default:
-		break;
+		for (FWraithXMaterial& Material : LodModel.Materials)
+		{
+			// 导出材质图像名
+			// 导出材质图像
+			// 注意重复性校验
+		}
 	}
+	// 准备模型
+	const int32 LodCount = GenericModel.ModelLods.Num();
+
+	FCastRoot SceneRoot;
+	SceneRoot.Models.Reserve(LodCount);
+	SceneRoot.ModelLodInfo.Reserve(LodCount);
+
+	for (int32 LodIdx = 0; LodIdx < LodCount; ++LodIdx)
+	{
+		FCastModelInfo ModelResult;
+
+		TranslateXModel(ModelResult, GenericModel, LodIdx);
+
+		FCastModelLod ModelLod;
+		ModelLod.Distance = GenericModel.ModelLods[LodIdx].LodDistance;
+		ModelLod.MaxDistance = GenericModel.ModelLods[LodIdx].LodMaxDistance;
+
+		ModelLod.ModelIndex = SceneRoot.Models.Add(ModelResult);
+		SceneRoot.ModelLodInfo.Add(ModelLod);
+	}
+	// 导出模型
 }
 
 void FWraithX::ImportImage(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
@@ -135,6 +160,68 @@ void FWraithX::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>>
 		default:
 			break;
 		}
+	}
+}
+
+void FWraithX::LoadGenericModelAsset(FWraithXModel& OutModel, TSharedPtr<FCoDModel> ModelInfo)
+{
+	switch (ProcessInstance->GetCurrentGameType())
+	{
+	case CoDAssets::ESupportedGames::ModernWarfare6:
+		FModernWarfare6::ReadXModel(OutModel, ProcessInstance, ModelInfo);
+		break;
+	default:
+		break;
+	}
+}
+
+void FWraithX::TranslateXModel(FCastModelInfo& OutModel, FWraithXModel& InModel, int32 LodIdx)
+{
+	OutModel.Name = InModel.ModelName;
+
+	FWraithXModelLod& LodRef = InModel.ModelLods[LodIdx];
+
+	TMap<FString, uint32> MaterialMap;
+
+	OutModel.Materials.Reserve(LodRef.Materials.Num());
+	for (int32 MatIdx = 0; MatIdx < LodRef.Materials.Num(); ++MatIdx)
+	{
+		FWraithXMaterial& MatRef = LodRef.Materials[MatIdx];
+
+		if (MaterialMap.Contains(MatRef.MaterialName))
+		{
+			LodRef.Submeshes[MatIdx].MaterialIndex = MaterialMap[MatRef.MaterialName];
+		}
+		else
+		{
+			FCastMaterialInfo& MaterialInfo = OutModel.Materials.AddDefaulted_GetRef();
+			MaterialInfo.Name = MatRef.MaterialName;
+
+			// TODO 加载材质
+			for (const FWraithXImage& Image : MatRef.Images)
+			{
+				FCastTextureInfo& Texture = MaterialInfo.Textures.AddDefaulted_GetRef();
+				Texture.TextureName = Image.ImageName;
+
+				FString TextureSemantic = FString::Printf(TEXT("unk_semantic_0x%x"), Image.SemanticHash);
+				Texture.TextureSemantic = TextureSemantic;
+			}
+			MaterialMap.Emplace(MatRef.MaterialName, OutModel.Materials.Num() - 1);
+		}
+	}
+	if (InModel.IsModelStreamed)
+	{
+		switch (ProcessInstance->GetCurrentGameType())
+		{
+		case CoDAssets::ESupportedGames::ModernWarfare6:
+			FModernWarfare6::LoadXModel(ProcessInstance, InModel, LodRef, OutModel);
+			break;
+		default:
+			break;
+		}
+	}
+	else
+	{
 	}
 }
 

@@ -151,6 +151,24 @@ struct FMW6GfxImage
 	uint64 LoadedImagePtr;
 };
 
+// 128字节
+struct FMW6BoneInfo
+{
+	uint8 NumBones;												// 0
+	uint8 NumRootBones;											// 1
+	uint8 Pad_2[6 - 2];											// 2
+	uint8 CosmeticBoneCount;									// 6
+	uint8 Pad_8[72 - 7];										// 7
+	uint64 BoneParentsPtr;										// 72
+	uint64 RotationsPtr;										// 80
+	uint64 TranslationsPtr;										// 88
+	uint64 Ptr4;												// 96
+	uint64 BaseMatriciesPtr;									// 104
+	uint64 BoneIDsPtr;											// 112
+	uint64 Ptr7;												// 120
+};
+
+// 232字节
 struct FMW6XModel
 {
 	uint64 Hash;												// 0
@@ -164,7 +182,9 @@ struct FMW6XModel
 	uint16 UnkBoneCount;										// 36
 	uint8 Pad_38[40 - 38];										// 38
 	float Scale;												// 40
-	uint8 Pad_44[144 - 44];										// 44
+	uint8 Pad_44[112 - 44];										// 44
+	uint64 BoneInfoPtr;											// 112
+	uint8 Pad_120[144 - 120];									// 120
 	uint64 MaterialHandles;										// 144
 	uint64 LodInfo;												// 152
 	uint8 Pad_160[200 - 160];									// 160
@@ -229,12 +249,15 @@ struct FMW6XSurfaceShared
 
 struct FMW6XSurface
 {
-	uint8 Pad_00[4];											// 0
+	uint16_t StatusFlag;										// 0
+	uint16_t FaceCountOld;										// 2
 	uint16 PackedIndicesTableCount;								// 4
 	uint8 Pad_06[24 - 6];										// 6
 	uint32 VertCount;											// 24
 	uint32 TriCount;											// 28
-	uint8 Pad_08[60-32];										// 32
+	uint8 Pad_08[36 - 32];										// 32
+	uint16 WeightCounts[8];										// 36
+	uint8 Pad_56[60 - 52];										// 56
 	float OverrideScale;										// 60
 	uint32 XyzOffset;											// 64
 	uint32 TexCoordOffset;										// 68
@@ -242,11 +265,13 @@ struct FMW6XSurface
 	uint32 IndexDataOffset;										// 76
 	uint32 PackedIndiciesTableOffset;							// 80
 	uint32 PackedIndicesOffset;									// 84
-	uint8 Pad_88[92 - 88];										// 88
+	uint32 VertexColorOffset;									// 88
 	uint32 ColorOffset;											// 92
 	uint32 SecondUVOffset;										// 96
-	uint8 Pad_100[120 - 100];									// 100
-	uint64 Shared;												// 120
+	uint8 Pad_100[108 - 100];									// 100
+	uint32 WeightsOffset;										// 108
+	uint8 Pad_112[120 - 112];									// 112
+	uint64 Shared; // MeshBufferPointer							// 120
 	uint8 Pad_124[176 - 128];									// 128
 	float OffsetsX;												// 176
 	float OffsetsY;												// 180

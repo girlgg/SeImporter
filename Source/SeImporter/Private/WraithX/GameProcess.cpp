@@ -47,23 +47,6 @@ bool FGameProcess::IsRunning()
 	return false;
 }
 
-
-uint64 FGameProcess::ReadArray(uint64 Address, TArray<uint8>& OutArray, uint64 Length)
-{
-	uint64 ReadSize = 0;
-	static FCriticalSection ProcessHandleCriticalSection;
-	FScopeLock Lock(&ProcessHandleCriticalSection);
-
-	OutArray.SetNum(Length);
-
-	if (ProcessHandle)
-	{
-		ReadProcessMemory(ProcessHandle, reinterpret_cast<LPCVOID>(Address), OutArray.GetData(), Length, &ReadSize);
-		assert(BytesRead == sizeof(T));
-	}
-	return ReadSize;
-}
-
 FString FGameProcess::ReadFString(uint64 Address)
 {
 	TArray<uint8> Data;
@@ -102,6 +85,9 @@ void FGameProcess::LoadGameFromParasyte()
 	// Modern Warfare 3 (2023)
 	case 0x4B4F4D41594D4159:
 		GameType = CoDAssets::ESupportedGames::ModernWarfare6;
+		GameFlag = ParasyteBaseState->Flags.Contains("sp")
+			            ? CoDAssets::ESupportedGameFlags::SP
+			            : CoDAssets::ESupportedGameFlags::MP;
 		XSubDecrypt = MakeShared<FXSub>(ParasyteBaseState->GameID, ParasyteBaseState->GameDirectory);
 		LoadAssets();
 		break;

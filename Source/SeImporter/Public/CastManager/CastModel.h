@@ -15,6 +15,7 @@ struct FCastBoneInfo
 	FString BoneName{""};
 	int32 ParentIndex{-1};
 	bool SegmentScaleCompensate{false};
+	bool bIsCosmetic;
 	FVector3f LocalPosition{};
 	FVector4f LocalRotation{0, 0, 0, 1};
 	FVector3f WorldPosition{};
@@ -75,9 +76,9 @@ enum ESettingType : int
 class FCastSettingInfo
 {
 public:
-	ESettingType Type{ Float4 };
-	FString Name{ "" };
-	FVector4 Value{ 0 };
+	ESettingType Type{Float4};
+	FString Name{""};
+	FVector4 Value{0};
 };
 
 struct FCastMaterialInfo
@@ -121,4 +122,11 @@ struct FCastModelInfo
 	TArray<FCastBlendShape> BlendShapes;
 
 	TMap<uint64, uint32> MaterialMap;
+};
+
+struct FCastModelLod
+{
+	float Distance{0.f};
+	float MaxDistance{0.f};
+	int32 ModelIndex{-1};
 };

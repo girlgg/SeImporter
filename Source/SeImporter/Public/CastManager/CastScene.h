@@ -3,6 +3,39 @@
 struct FCastRoot;
 class FCastNode;
 
+struct FCastWeightsData
+{
+	// The weight value for each bone
+	float WeightValues[8];
+	// The bone ids for each value
+	uint32_t BoneValues[8];
+	// The count of weights this set contains
+	uint8_t WeightCount;
+
+	FCastWeightsData()
+	{
+		// Defaults
+		WeightCount = 1;
+		// Clear memory
+		WeightValues[0] = 1.0f;
+		WeightValues[1] = 1.0f;
+		WeightValues[2] = 1.0f;
+		WeightValues[3] = 1.0f;
+		WeightValues[4] = 1.0f;
+		WeightValues[5] = 1.0f;
+		WeightValues[6] = 1.0f;
+		WeightValues[7] = 1.0f;
+		BoneValues[0] = 0;
+		BoneValues[1] = 0;
+		BoneValues[2] = 0;
+		BoneValues[3] = 0;
+		BoneValues[4] = 0;
+		BoneValues[5] = 0;
+		BoneValues[6] = 0;
+		BoneValues[7] = 0;
+	}
+};
+
 struct FCastMeshInfo
 {
 	FString Name{""};
@@ -13,7 +46,10 @@ struct FCastMeshInfo
 	TArray<uint32> VertexColor{};
 	// TArray<TArray<FVector2f>> VertexUV;
 	TArray<FVector2f> VertexUV{};
+	TArray<FCastWeightsData> VertexWeights;
+	// TODO：删除骨骼Buffer
 	TArray<uint32> VertexWeightBone{};
+	// TODO：删除权重值Buffer
 	TArray<float> VertexWeightValue{};
 	TArray<uint32> Faces{};
 	TArray<uint32> ColorLayer{};
@@ -21,6 +57,7 @@ struct FCastMeshInfo
 	uint32 MaxWeight{}; // 每个顶点被多少个骨骼影响权重
 	FString SkinningMethod{};
 	uint64 MaterialHash{};
+	int32 MaterialIndex;
 
 	FVector BBoxMax{0};
 	FVector BBoxMin{0};

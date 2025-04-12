@@ -8,7 +8,7 @@ namespace LocateGameInfo
 		FString GameDirectory;
 		uint64 PoolsAddress{0};
 		uint64 StringsAddress{0};
-		TArray<FString> Flags;
+		TSet<FString> Flags;
 	};
 	
 	bool Parasyte(const FString & ProcessPath, TSharedPtr<FParasyteBaseState> & OutState);

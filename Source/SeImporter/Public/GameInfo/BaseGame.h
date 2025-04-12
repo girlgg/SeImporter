@@ -80,7 +80,7 @@ protected:
 	virtual uint64 GetIndexDataOffset(const TXSurface& Surface) = 0;
 	virtual uint64 GetPackedIndicesOffset(const TXSurface& Surface) = 0;
 
-private:
+protected:
 	static uint64 ComputeHash(FString Data)
 	{
 		uint64 Hash = 0xCBD29CE484222325;
@@ -234,7 +234,7 @@ private:
 		UE_LOG(LogTemp, Verbose, TEXT("Processed %d surfaces in %.2fms"), GfxWorldSurfaces.Count, DurationMs);
 	}
 
-	void UnpackCoDQTangent(const uint32 Packed, FVector3f& Tangent, FVector3f& Normal)
+	static void UnpackCoDQTangent(const uint32 Packed, FVector3f& Tangent, FVector3f& Normal)
 	{
 		uint32 Idx = Packed >> 30;
 
