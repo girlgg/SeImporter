@@ -1,0 +1,24 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.6",
+  "FriendlyName": "IWToUE",
+  "Description": "",
+  "Category": "Other",
+  "CreatedBy": "girlgg",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "CanContainContent": true,
+  "IsBetaVersion": false,
+  "IsExperimentalVersion": false,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "IWToUE",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ]
+}
