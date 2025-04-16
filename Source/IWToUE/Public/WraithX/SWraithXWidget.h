@@ -147,6 +147,7 @@ private:
 	FReply HandleLoadGame();
 	FReply HandleImportSelected();
 	FReply HandleImportAll();
+	FReply HandleSettingsButton();
 	void UpdateAssetCount();
 	void OnLoadCompleted();
 

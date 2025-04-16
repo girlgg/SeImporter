@@ -344,6 +344,13 @@ struct FMW6XAnimDataInfo
 	uint64 StreamInfoPtr;
 };
 
+struct FMW6XAnimDeltaParts
+{
+	uint64 DeltaTranslationsPtr;
+	uint64 Delta2DRotationsPtr;
+	uint64 Delta3DRotationsPtr;
+};
+
 struct FMW6XAnim
 {
 	uint64 Hash;
@@ -365,7 +372,7 @@ struct FMW6XAnim
 	uint16 RandomDataIntCount;
 	uint16 FrameCount;
 
-	uint8_t Padding2[6];
+	uint8 Padding2[6];
 
 	uint16 NoneRotatedBoneCount;
 	uint16 TwoDRotatedBoneCount;
@@ -462,4 +469,18 @@ inline uint32_t GMW6DXGIFormats[52]
 	31,
 	0,
 	0
+};
+
+struct FMW6XAnimBufferState
+{
+	// The packed per frame information.
+	TArray<uint32> PackedPerFrameInfo{};
+	// The current buffer index requested from the packed buffer.
+	int32 BufferIndex = 0;
+	// The offset within the buffer from the packed buffer.
+	int32 BufferOffset = 0;
+	// The number of buffers.
+	int32 OffsetCount = 0;
+	// The current offset within the packed buffer.
+	int32 PackedPerFrameOffset = 0;
 };

@@ -214,3 +214,54 @@ bool FCoDMeshHelper::UnpackFaceIndices(TSharedPtr<FGameProcess> ProcessInstance,
 	}
 	return false;
 }
+
+FVector4 VectorPacking::QuatPackingA(const uint64 PackedData)
+{
+	uint64 PackedQuatData = PackedData;
+	int32 Axis = PackedQuatData & 3;
+	int32 WSign = PackedQuatData >> 63;
+	PackedQuatData >>= 2;
+
+	int32 ix = (int32)(PackedQuatData & 0xfffff);
+	if (ix > 0x7ffff) ix -= 0x100000;
+	int32 iy = (int32)((PackedQuatData >> 20) & 0xfffff);
+	if (iy > 0x7ffff) iy -= 0x100000;
+	int32 iz = (int32)((PackedQuatData >> 40) & 0xfffff);
+	if (iz > 0x7ffff) iz -= 0x100000;
+	float x = ix / 1048575.f;
+	float y = iy / 1048575.f;
+	float z = iz / 1048575.f;
+
+	x *= 1.41421f;
+	y *= 1.41421f;
+	z *= 1.41421f;
+
+	float w = (float)std::pow<float>(1 - x * x - y * y - z * z, 0.5f);
+
+	if (WSign)
+		w = -w;
+
+	switch (Axis)
+	{
+	case 0: return FVector4(w, x, y, z);
+	case 1: return FVector4(x, y, z, w);
+	case 2: return FVector4(y, z, w, x);
+	case 3: return FVector4(z, w, x, y);
+	default: return FVector4();
+	}
+}
+
+FVector4 VectorPacking::QuatPacking2DA(const uint32 PackedData)
+{
+	uint32 PackedQuatData = PackedData;
+	int WSign = ((PackedQuatData >> 30) & 1);
+	PackedQuatData &= 0xBFFFFFFF;
+
+	float Z = *(float*)&PackedQuatData;
+	float W = (float)std::sqrtf(1.f - std::pow<float>(Z, 2.f));
+
+	if (WSign)
+		W = -W;
+
+	return FVector4(0, 0, Z, W);
+}

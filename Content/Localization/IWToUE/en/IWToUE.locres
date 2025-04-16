@@ -1,0 +1,26 @@
+﻿
+{
+    "Namespace": "IWToUE",
+    "Keys": {
+        "OK": "OK",
+        "Cancel": "Cancel",
+        "Import": "Import",
+        "Export": "Export",
+        "Error_ImportFailed": "Import Failed",
+        "Error_ExportFailed": "Export Failed",
+        "Error_InvalidFile": "Invalid File",
+        "Error_FileNotFound": "File Not Found",
+        "Info_ImportSuccess": "Import Successful",
+        "Info_ExportSuccess": "Export Successful",
+        "Info_Processing": "Processing...",
+        "Settings_Title": "IWToUE Settings",
+        "Settings_General": "General Settings",
+        "Settings_Advanced": "Advanced Settings",
+        "Import_SelectFile": "Select File",
+        "Import_Options": "Import Options",
+        "Import_AutoProcess": "Auto Process",
+        "Export_SelectPath": "Select Path",
+        "Export_Options": "Export Options",
+        "Export_Format": "Export Format"
+    }
+}

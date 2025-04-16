@@ -77,6 +77,7 @@ public:
 	template <typename T>
 	uint64 ReadArray(uint64 Address, TArray<T>& OutArray, uint64 Length);
 	FString ReadFString(uint64 Address);
+	FString LoadStringEntry(uint64 Index);
 
 	FORCEINLINE TArray<TSharedPtr<FCoDAsset>>& GetLoadedAssets() { return LoadedAssets; }
 
@@ -178,7 +179,7 @@ uint64 FGameProcess::ReadArray(uint64 Address, TArray<T>& OutArray, uint64 Lengt
 	static FCriticalSection ProcessHandleCriticalSection;
 	FScopeLock Lock(&ProcessHandleCriticalSection);
 
-	OutArray.SetNumUninitialized(Length);
+	OutArray.SetNum(Length);
 
 	if (ProcessHandle)
 	{

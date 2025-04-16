@@ -63,6 +63,11 @@ FString FGameProcess::ReadFString(uint64 Address)
 	return FString(ANSI_TO_TCHAR(reinterpret_cast<const char*>(Data.GetData())));
 }
 
+FString FGameProcess::LoadStringEntry(uint64 Index)
+{
+	return ReadFString(ParasyteBaseState->StringsAddress + Index);
+}
+
 bool FGameProcess::LocateGameInfo()
 {
 	switch (ProcessInfo.GameID)

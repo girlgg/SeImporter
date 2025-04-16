@@ -1,5 +1,6 @@
 ﻿#include "WraithX/WraithX.h"
 
+#include "CastManager/CastAnimation.h"
 #include "CastManager/CastRoot.h"
 #include "GameInfo/ModernWarfare6.h"
 #include "Utils/CoDAssetHelper.h"
@@ -23,6 +24,17 @@ void FWraithX::RefreshGame()
 		ProcessInstance->LoadGameFromParasyte();
 		FCoDAssetDatabase::Get().GetTaskCompletedHandle().AddRaw(this, &FWraithX::OnAssetInitCompletedCall);
 	}
+}
+
+void FWraithX::ImportAnim(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
+{
+	TSharedPtr<FCoDAnim> ModelInfo = StaticCastSharedPtr<FCoDAnim>(Asset);
+
+	FWraithXAnim GenericAnim;
+	LoadGenericAnimAsset(GenericAnim, ModelInfo);
+
+	FCastAnimationInfo AnimResult;
+	TranslateXAnim(AnimResult, GenericAnim);
 }
 
 void FWraithX::ImportModel(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
@@ -144,6 +156,7 @@ void FWraithX::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>>
 		switch (Asset->AssetType)
 		{
 		case EWraithAssetType::Animation:
+			ImportAnim(ImportPath, Asset);
 			break;
 		case EWraithAssetType::Image:
 			ImportImage(ImportPath, Asset);
@@ -160,6 +173,18 @@ void FWraithX::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>>
 		default:
 			break;
 		}
+	}
+}
+
+void FWraithX::LoadGenericAnimAsset(FWraithXAnim& OutAnim, TSharedPtr<FCoDAnim> AnimInfo)
+{
+	switch (ProcessInstance->GetCurrentGameType())
+	{
+	case CoDAssets::ESupportedGames::ModernWarfare6:
+		FModernWarfare6::ReadXAnim(OutAnim, ProcessInstance, AnimInfo);
+		break;
+	default:
+		break;
 	}
 }
 
@@ -222,6 +247,303 @@ void FWraithX::TranslateXModel(FCastModelInfo& OutModel, FWraithXModel& InModel,
 	}
 	else
 	{
+	}
+}
+
+void FWraithX::TranslateXAnim(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim)
+{
+	OutAnim.Name = InAnim.AnimationName;
+	OutAnim.Framerate = InAnim.FrameRate;
+	OutAnim.Looping = InAnim.LoopingAnimation;
+
+	OutAnim.Type = ECastAnimationType::Relative;
+	if (InAnim.ViewModelAnimation)
+	{
+		OutAnim.Type = ECastAnimationType::Absolute;
+	}
+	if (InAnim.DeltaTranslationPtr || InAnim.Delta2DRotationsPtr || InAnim.Delta3DRotationsPtr)
+	{
+		OutAnim.Type = ECastAnimationType::Delta;
+		OutAnim.DeltaTagName = TEXT("tag_origin");
+	}
+	if (InAnim.AdditiveAnimation)
+	{
+		OutAnim.Type = ECastAnimationType::Additive;
+	}
+
+	switch (ProcessInstance->GetCurrentGameType())
+	{
+	case CoDAssets::ESupportedGames::ModernWarfare6:
+		FModernWarfare6::LoadXAnim(ProcessInstance, InAnim, OutAnim);
+		break;
+	default:
+		break;
+	}
+	for (auto& NoteTrack : InAnim.Reader.Notetracks)
+	{
+		OutAnim.AddNotificationKey(NoteTrack.Key, (uint32)NoteTrack.Value);
+	}
+
+	if (InAnim.DeltaTranslationPtr)
+	{
+		switch (ProcessInstance->GetCurrentGameType())
+		{
+		case CoDAssets::ESupportedGames::ModernWarfare6:
+			DeltaTranslation64(OutAnim, InAnim, InAnim.FrameCount > 255 ? 2 : 1);
+			break;
+		default:
+			break;
+		}
+	}
+	if (InAnim.Delta2DRotationsPtr)
+	{
+		switch (ProcessInstance->GetCurrentGameType())
+		{
+		case CoDAssets::ESupportedGames::ModernWarfare6:
+			Delta2DRotation64(OutAnim, InAnim, InAnim.FrameCount > 255 ? 2 : 1);
+			break;
+		default:
+			break;
+		}
+	}
+	if (InAnim.Delta3DRotationsPtr)
+	{
+		switch (ProcessInstance->GetCurrentGameType())
+		{
+		case CoDAssets::ESupportedGames::ModernWarfare6:
+			Delta3DRotation64(OutAnim, InAnim, InAnim.FrameCount > 255 ? 2 : 1);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
+void FWraithX::DeltaTranslation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim, uint32 FrameSize)
+{
+	uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.DeltaTranslationPtr);
+	InAnim.DeltaTranslationPtr += 2;
+	uint8 DataSize = ProcessInstance->ReadMemory<uint8>(InAnim.DeltaTranslationPtr);
+	InAnim.DeltaTranslationPtr += 6;
+	FVector3f MinVec = ProcessInstance->ReadMemory<FVector3f>(InAnim.DeltaTranslationPtr);
+	InAnim.DeltaTranslationPtr += 12;
+	FVector3f SizeVec = ProcessInstance->ReadMemory<FVector3f>(InAnim.DeltaTranslationPtr);
+	InAnim.DeltaTranslationPtr += 12;
+	if (!FrameCount)
+	{
+		OutAnim.AddTranslationKey(TEXT("tag_origin"), 0, FVector(MinVec));
+		return;
+	}
+	uint64 DeltaDataPtr = ProcessInstance->ReadMemory<uint64>(InAnim.DeltaTranslationPtr);
+	InAnim.DeltaTranslationPtr += 8;
+	if (FrameCount)
+	{
+		for (uint32 i = 0; i <= FrameCount; ++i)
+		{
+			uint32 FrameIndex = 0;
+			if (FrameSize == 1)
+			{
+				FrameIndex = ProcessInstance->ReadMemory<uint8>(InAnim.DeltaTranslationPtr);
+				InAnim.DeltaTranslationPtr += 1;
+			}
+			else if (FrameSize == 2)
+			{
+				FrameIndex = ProcessInstance->ReadMemory<uint16>(InAnim.DeltaTranslationPtr);
+				InAnim.DeltaTranslationPtr += 2;
+			}
+
+			float XCoord, YCoord, ZCoord;
+			if (DataSize == 1)
+			{
+				XCoord = ProcessInstance->ReadMemory<uint8>(DeltaDataPtr);
+				YCoord = ProcessInstance->ReadMemory<uint8>(DeltaDataPtr + 1);
+				ZCoord = ProcessInstance->ReadMemory<uint8>(DeltaDataPtr + 2);
+				DeltaDataPtr += 3;
+			}
+			else
+			{
+				XCoord = ProcessInstance->ReadMemory<uint16>(DeltaDataPtr);
+				YCoord = ProcessInstance->ReadMemory<uint16>(DeltaDataPtr + 2);
+				ZCoord = ProcessInstance->ReadMemory<uint16>(DeltaDataPtr + 4);
+				DeltaDataPtr += 6;
+			}
+			float TranslationX = (SizeVec.X * XCoord) + MinVec.X;
+			float TranslationY = (SizeVec.Y * YCoord) + MinVec.Y;
+			float TranslationZ = (SizeVec.Z * ZCoord) + MinVec.Z;
+
+			OutAnim.AddTranslationKey(TEXT("tag_origin"), FrameIndex,
+			                          FVector(TranslationX, TranslationY, TranslationZ));
+		}
+	}
+}
+
+void FWraithX::Delta2DRotation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim, uint32 FrameSize)
+{
+	const uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.Delta2DRotationsPtr);
+	InAnim.Delta2DRotationsPtr += 8;
+
+	if (FrameCount)
+	{
+		const auto RotationData = ProcessInstance->ReadMemory<FQuat2Data>(InAnim.Delta2DRotationsPtr);
+		InAnim.Delta2DRotationsPtr += 4;
+
+		if (InAnim.RotationType == EAnimationKeyTypes::DivideBySize)
+		{
+			const FVector4 Rot{
+				0, 0, ((float)RotationData.RotationZ / 32768.f), ((float)RotationData.RotationW / 32768.f)
+			};
+			OutAnim.AddRotationKey("tag_origin", 0, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::HalfFloat)
+		{
+			FFloat16 RZ, RW;
+			RZ.Encoded = (uint16)RotationData.RotationZ;
+			RW.Encoded = (uint16)RotationData.RotationW;
+			const FVector4 Rot{0, 0, RZ, RW};
+
+			OutAnim.AddRotationKey("tag_origin", 0, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::QuatPackingA)
+		{
+			auto Rotation = VectorPacking::QuatPacking2DA(*(uint32*)&RotationData);
+			OutAnim.AddRotationKey("tag_origin", 0, Rotation);
+		}
+		return;
+	}
+
+	uint64 DeltaDataPtr = ProcessInstance->ReadMemory<uint64>(InAnim.Delta2DRotationsPtr);
+	InAnim.Delta2DRotationsPtr += 8;
+
+	if (!FrameCount)
+		return;
+
+	for (uint32 i = 0; i <= FrameCount; i++)
+	{
+		uint32_t FrameIndex = 0;
+		if (FrameSize == 1)
+		{
+			FrameIndex = ProcessInstance->ReadMemory<uint8>(InAnim.Delta2DRotationsPtr);
+			InAnim.Delta2DRotationsPtr += 1;
+		}
+		else if (FrameSize == 2)
+		{
+			FrameIndex = ProcessInstance->ReadMemory<uint16>(InAnim.Delta2DRotationsPtr);
+			InAnim.Delta2DRotationsPtr += 2;
+		}
+
+		FQuat2Data RotationData = ProcessInstance->ReadMemory<FQuat2Data>(DeltaDataPtr);
+		DeltaDataPtr += 4;
+
+		if (InAnim.RotationType == EAnimationKeyTypes::DivideBySize)
+		{
+			FVector4 Rot{
+				0, 0,
+				((float)RotationData.RotationZ / 32768.f),
+				((float)RotationData.RotationW / 32768.f)
+			};
+			OutAnim.AddRotationKey("tag_origin", FrameIndex, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::HalfFloat)
+		{
+			FFloat16 RZ, RW;
+			RZ.Encoded = (uint16)RotationData.RotationZ;
+			RW.Encoded = (uint16)RotationData.RotationW;
+			const FVector4 Rot{0, 0, RZ, RW};
+
+			OutAnim.AddRotationKey("tag_origin", FrameIndex, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::QuatPackingA)
+		{
+			auto Rotation = VectorPacking::QuatPacking2DA(*(uint32*)&RotationData);
+			OutAnim.AddRotationKey("tag_origin", FrameIndex, Rotation);
+		}
+	}
+}
+
+void FWraithX::Delta3DRotation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim, uint32 FrameSize)
+{
+	uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.Delta3DRotationsPtr);
+	InAnim.Delta3DRotationsPtr += 8;
+
+	if (FrameCount == 0)
+	{
+		auto RotationData = ProcessInstance->ReadMemory<FQuatData>(InAnim.Delta3DRotationsPtr);
+		InAnim.Delta3DRotationsPtr += 8;
+
+		if (InAnim.RotationType == EAnimationKeyTypes::DivideBySize)
+		{
+			FVector4 Rot{
+				((float)RotationData.RotationX / 32768.f), ((float)RotationData.RotationY / 32768.f),
+				((float)RotationData.RotationZ / 32768.f), ((float)RotationData.RotationW / 32768.f)
+			};
+			OutAnim.AddRotationKey("tag_origin", 0, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::HalfFloat)
+		{
+			FFloat16 RX, RY, RZ, RW;
+			RX.Encoded = (uint16)RotationData.RotationX;
+			RY.Encoded = (uint16)RotationData.RotationY;
+			RZ.Encoded = (uint16)RotationData.RotationZ;
+			RW.Encoded = (uint16)RotationData.RotationW;
+			const FVector4 Rot{RX, RY, RZ, RW};
+
+			OutAnim.AddRotationKey("tag_origin", 0, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::QuatPackingA)
+		{
+			auto Rotation = VectorPacking::QuatPackingA(*(uint64_t*)&RotationData);
+			OutAnim.AddRotationKey("tag_origin", 0, Rotation);
+		}
+		return;
+	}
+
+	uint64 DeltaDataPtr = ProcessInstance->ReadMemory<uint64>(InAnim.Delta3DRotationsPtr);
+	InAnim.Delta3DRotationsPtr += 8;
+
+	if (!FrameCount)
+		return;
+
+	for (uint32 i = 0; i <= FrameCount; i++)
+	{
+		uint32 FrameIndex = 0;
+		if (FrameSize == 1)
+		{
+			FrameIndex = ProcessInstance->ReadMemory<uint8>(InAnim.Delta3DRotationsPtr);
+			InAnim.Delta3DRotationsPtr += 1;
+		}
+		else if (FrameSize == 2)
+		{
+			FrameIndex = ProcessInstance->ReadMemory<uint16>(InAnim.Delta3DRotationsPtr);
+			InAnim.Delta3DRotationsPtr += 2;
+		}
+
+		auto RotationData = ProcessInstance->ReadMemory<FQuatData>(DeltaDataPtr);
+		DeltaDataPtr += 8;
+
+		if (InAnim.RotationType == EAnimationKeyTypes::DivideBySize)
+		{
+			FVector4 Rot{
+				((float)RotationData.RotationX / 32768.f), ((float)RotationData.RotationY / 32768.f),
+				((float)RotationData.RotationZ / 32768.f), ((float)RotationData.RotationW / 32768.f)
+			};
+			OutAnim.AddRotationKey("tag_origin", FrameIndex, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::HalfFloat)
+		{
+			FFloat16 RX, RY, RZ, RW;
+			RX.Encoded = (uint16)RotationData.RotationX;
+			RY.Encoded = (uint16)RotationData.RotationY;
+			RZ.Encoded = (uint16)RotationData.RotationZ;
+			RW.Encoded = (uint16)RotationData.RotationW;
+			const FVector4 Rot{RX, RY, RZ, RW};
+
+			OutAnim.AddRotationKey("tag_origin", 0, Rot);
+		}
+		else if (InAnim.RotationType == EAnimationKeyTypes::QuatPackingA)
+		{
+			auto Rotation = VectorPacking::QuatPackingA(*(uint64_t*)&RotationData);
+			OutAnim.AddRotationKey("tag_origin", 0, Rotation);
+		}
 	}
 }
 

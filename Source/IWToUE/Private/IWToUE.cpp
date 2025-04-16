@@ -6,6 +6,7 @@
 
 void FIWToUEModule::StartupModule()
 {
+	// 注册菜单
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateLambda([this]()
 	{
 		MapImporter->RegisterMenus();

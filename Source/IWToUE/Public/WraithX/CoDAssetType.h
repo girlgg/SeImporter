@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "Structures/SharedStructures.h"
 #include "UObject/Object.h"
 
 #define LOCTEXT_NAMESPACE "CodAssetType"
@@ -360,11 +361,128 @@ struct FWraithXModel
 	TArray<FWraithXModelLod> ModelLods;
 };
 
+struct FMW6XAnimStreamInfo
+{
+	uint64 StreamKey;
+	uint32 Size;
+	uint32 Padding;
+};
+
+enum class EAnimationKeyTypes
+{
+	DivideBySize,
+	MinSizeTable,
+	QuatPackingA,
+	HalfFloat
+};
+
+struct FMW6XAnimNoteTrack
+{
+	uint32 Name;
+	float Time;
+	uint8 Padding[24];
+};
+
+struct FWraithXAnim
+{
+	// The name of the asset
+	FString AnimationName;
+
+	// The framerate of this animation
+	float FrameRate;
+	// The framecount of this animation
+	uint32 FrameCount;
+
+	// Whether or not this is a viewmodel animation
+	bool ViewModelAnimation = false;
+	// Whether or not this animation loops
+	bool LoopingAnimation = false;
+	// Whether or not this animation is additive
+	bool AdditiveAnimation = false;
+	uint8 AnimType;
+	// Whether or not we support inline-indicies
+	bool SupportsInlineIndicies;
+
+	// A pointer to bone name string indicies
+	uint64 BoneIDsPtr;
+	// The size of the bone name index
+	uint8 BoneIndexSize;
+	// The size of the inline bone indicies (0) when not in use
+	uint8 BoneTypeSize;
+
+	// What type of rotation data we have
+	EAnimationKeyTypes RotationType;
+	// What type of translation data we have
+	EAnimationKeyTypes TranslationType;
+
+	// A pointer to animation byte size data
+	uint64 DataBytesPtr;
+	// A pointer to animation short size data
+	uint64 DataShortsPtr;
+	// A pointer to animation integer size data
+	uint64 DataIntsPtr;
+
+	// A pointer to animation (rand) byte size data
+	uint64 RandomDataBytesPtr;
+	// A pointer to animation (rand) short size data
+	uint64 RandomDataShortsPtr;
+	// A pointer to animation (rand) integer size data
+	uint64 RandomDataIntsPtr;
+
+	// A pointer to animation indicies (When we have more than 255)
+	uint64 LongIndiciesPtr;
+	// A pointer to animation notetracks
+	uint64 NotificationsPtr;
+	// A pointer to blendshape names
+	uint64 BlendShapeNamesPtr;
+	// A pointer to blendshape weights
+	uint64 BlendShapeWeightsPtr;
+
+	// A pointer to animation delta translations
+	uint64 DeltaTranslationPtr;
+	// A pointer to 2D animation delta rotations
+	uint64 Delta2DRotationsPtr;
+	// A pointer to 3D animation delta rotations
+	uint64 Delta3DRotationsPtr;
+
+	// The count of non-rotated bones
+	uint32 NoneRotatedBoneCount;
+	// The count of 2D rotated bones
+	uint32 TwoDRotatedBoneCount;
+	// The count of 3D rotated bones
+	uint32 NormalRotatedBoneCount;
+	// The count of 2D static rotated bones
+	uint32 TwoDStaticRotatedBoneCount;
+	// The count of 3D static rotated bones
+	uint32 NormalStaticRotatedBoneCount;
+	// The count of normal translated bones
+	uint32 NormalTranslatedBoneCount;
+	// The count of precise translated bones
+	uint32 PreciseTranslatedBoneCount;
+	// The count of static translated bones
+	uint32 StaticTranslatedBoneCount;
+	// The count of non-translated bones
+	uint32 NoneTranslatedBoneCount;
+	// The total bone count
+	uint32 TotalBoneCount;
+	// The count of notetracks
+	uint32 NotificationCount;
+	// The count of blendshape weights
+	uint32 BlendShapeWeightCount;
+
+	// XAnim Reader (Streamed)
+	FCoDXAnimReader Reader;
+	// XAnim Reader Function
+	// std::function<void(const std::unique_ptr<XAnim_t>&, std::unique_ptr<WraithAnim>&)> ReaderFunction;
+	// XAnim Reader Information Pointer.
+	uint64 ReaderInformationPointer;
+};
+
 // 骨骼位置信息
 struct FCastBoneTransform
 {
-	FVector4f Rotation;       // 16 bytes (x, y, z, w)
-	FVector3f Translation;    // 12 bytes (x, y, z)
+	FVector4f Rotation; // 16 bytes (x, y, z, w)
+	FVector3f Translation; // 12 bytes (x, y, z)
 	float TranslationWeight; // 4 bytes
 };
 

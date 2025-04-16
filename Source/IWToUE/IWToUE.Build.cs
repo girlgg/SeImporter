@@ -33,7 +33,8 @@ public class IWToUE : ModuleRules
 				"PhysicsUtilities", 
 				"OodleDataCompression",
 				"SQLiteCore",
-				"SQLiteSupport"
+				"SQLiteSupport",
+				"Projects"
 			}
 		);
 

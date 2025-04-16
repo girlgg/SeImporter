@@ -1,5 +1,6 @@
 ﻿#include "GameInfo/ModernWarfare6.h"
 
+#include "CastManager/CastAnimation.h"
 #include "CDN/CoDCDNDownloader.h"
 #include "Structures/MW6SPGameStructures.h"
 #include "Utils/CoDAssetHelper.h"
@@ -95,6 +96,61 @@ uint64 FModernWarfare6::GetIndexDataOffset(const FMW6XSurface& Surface)
 uint64 FModernWarfare6::GetPackedIndicesOffset(const FMW6XSurface& Surface)
 {
 	return Surface.PackedIndicesOffset;
+}
+
+bool FModernWarfare6::ReadXAnim(FWraithXAnim& OutAnim, TSharedPtr<FGameProcess> ProcessInstance,
+                                TSharedPtr<FCoDAnim> AnimAddr)
+{
+	auto AnimData = ProcessInstance->ReadMemory<FMW6XAnim>(AnimAddr->AssetPointer);
+
+	if (AnimData.DataInfo.StreamInfoPtr == 0)
+	{
+		return false;
+	}
+	OutAnim.AnimationName = AnimAddr->AssetName;
+	OutAnim.FrameCount = AnimAddr->FrameCount;
+	OutAnim.FrameRate = AnimData.Framerate;
+	OutAnim.LoopingAnimation = (AnimData.Padding2[4] & 1);
+	OutAnim.AdditiveAnimation = AnimData.AssetType == 0x6;
+	OutAnim.AnimType = AnimData.AssetType;
+	FMW6XAnimDeltaParts AnimDeltaData = ProcessInstance->ReadMemory<FMW6XAnimDeltaParts>(AnimData.DeltaPartsPtr);
+	OutAnim.BoneIndexSize = 4;
+
+	OutAnim.NoneRotatedBoneCount = AnimData.NoneRotatedBoneCount;
+	OutAnim.TwoDRotatedBoneCount = AnimData.TwoDRotatedBoneCount;
+	OutAnim.NormalRotatedBoneCount = AnimData.NormalRotatedBoneCount;
+	OutAnim.TwoDStaticRotatedBoneCount = AnimData.TwoDStaticRotatedBoneCount;
+	OutAnim.NormalStaticRotatedBoneCount = AnimData.NormalStaticRotatedBoneCount;
+	OutAnim.NormalTranslatedBoneCount = AnimData.NormalTranslatedBoneCount;
+	OutAnim.PreciseTranslatedBoneCount = AnimData.PreciseTranslatedBoneCount;
+	OutAnim.StaticTranslatedBoneCount = AnimData.StaticTranslatedBoneCount;
+	OutAnim.TotalBoneCount = AnimData.TotalBoneCount;
+	OutAnim.NotificationCount = AnimData.NotetrackCount;
+
+	OutAnim.ReaderInformationPointer = AnimAddr->AssetPointer;
+	for (uint16 BoneIdx = 0; BoneIdx < AnimData.TotalBoneCount; BoneIdx++)
+	{
+		const uint32 BoneID = ProcessInstance->ReadMemory<uint32>(AnimData.BoneIDsPtr + BoneIdx * 4);
+		FString BoneName;
+		FCoDAssetDatabase::Get().AssetName_QueryValueRetName(BoneID, BoneName, "bone");
+		OutAnim.Reader.BoneNames.Add(BoneName);
+	}
+	for (uint8 TrackIdx = 0; TrackIdx < AnimData.NotetrackCount; TrackIdx++)
+	{
+		FMW6XAnimNoteTrack NoteTrack = ProcessInstance->ReadMemory<FMW6XAnimNoteTrack>(
+			AnimData.NotificationsPtr + TrackIdx * sizeof(FMW6XAnimNoteTrack));
+		FString NoteTrackName = ProcessInstance->LoadStringEntry(NoteTrack.Name);
+		OutAnim.Reader.Notetracks.Emplace(NoteTrackName, NoteTrack.Time * (int32)((float)AnimData.FrameCount)); // ???
+	}
+	OutAnim.DeltaTranslationPtr = AnimDeltaData.DeltaTranslationsPtr;
+	OutAnim.Delta2DRotationsPtr = AnimDeltaData.Delta2DRotationsPtr;
+	OutAnim.Delta3DRotationsPtr = AnimDeltaData.Delta3DRotationsPtr;
+
+	OutAnim.RotationType = EAnimationKeyTypes::DivideBySize;
+	OutAnim.TranslationType = EAnimationKeyTypes::MinSizeTable;
+	OutAnim.SupportsInlineIndicies = true;
+
+	return true;
 }
 
 uint8 FModernWarfare6::ReadXImage(TSharedPtr<FGameProcess> ProcessInstance,
@@ -287,6 +343,247 @@ bool FModernWarfare6::ReadXMaterial(FWraithXMaterial& OutMaterial, TSharedPtr<FG
 	return true;
 }
 
+void FModernWarfare6::LoadXAnim(TSharedPtr<FGameProcess> ProcessInstance, FWraithXAnim& InAnim,
+                                FCastAnimationInfo& OutAnim)
+{
+	FMW6XAnim AnimHeader = ProcessInstance->ReadMemory<FMW6XAnim>(InAnim.ReaderInformationPointer);
+
+	uint8* DataByte = nullptr;
+	int16* DataShort = nullptr;
+	int32* DataInt = nullptr;
+
+	TArray<uint8*> RandomDataBytes;
+	TArray<int16*> RandomDataShorts;
+
+	OutAnim.Type = ECastAnimationType::Relative;
+
+	TArray<uint32> AnimPackedInfo;
+	ProcessInstance->ReadArray(AnimHeader.DataInfo.PackedInfoPtr, AnimPackedInfo,
+	                           AnimHeader.DataInfo.PackedInfoCount);
+	TArray<uint8> IndicesBuffer;
+	ProcessInstance->ReadArray(AnimHeader.IndicesPtr, IndicesBuffer,
+	                           AnimHeader.FrameCount >= 0x100 ? AnimHeader.IndexCount * 2 : AnimHeader.IndexCount);
+
+	uint16* Indices = reinterpret_cast<uint16*>(IndicesBuffer.GetData());
+
+	TArray<TArray<uint8>> AnimBuffers;
+	for (uint32 CountIdx = 0; CountIdx < AnimHeader.DataInfo.OffsetCount; ++CountIdx)
+	{
+		FMW6XAnimStreamInfo StreamInfo = ProcessInstance->ReadMemory<FMW6XAnimStreamInfo>(
+			AnimHeader.DataInfo.StreamInfoPtr + CountIdx * sizeof(FMW6XAnimStreamInfo));
+
+		TArray<uint8> AnimBuffer = ProcessInstance->GetDecrypt()->ExtractXSubPackage(
+			StreamInfo.StreamKey, StreamInfo.Size);
+		AnimBuffers.Add(AnimBuffer);
+		if (CountIdx == 0)
+		{
+			if (AnimHeader.DataInfo.DataByteOffset != -1)
+				DataByte = AnimBuffers[0].GetData() + AnimHeader.DataInfo.DataByteOffset;
+
+			if (AnimHeader.DataInfo.DataShortOffset != -1)
+				DataShort = reinterpret_cast<int16*>(AnimBuffers[0].GetData() + AnimHeader.DataInfo.
+					DataShortOffset);
+
+			if (AnimHeader.DataInfo.DataIntOffset != -1)
+				DataInt = reinterpret_cast<int32*>(AnimBuffers[0].GetData() + AnimHeader.DataInfo.
+					DataIntOffset);
+		}
+		uint32 RandomDataAOffset = ProcessInstance->ReadMemory<uint32>(AnimHeader.DataInfo.OffsetPtr2 + CountIdx * 4);
+		uint32 RandomDataBOffset = ProcessInstance->ReadMemory<uint32>(AnimHeader.DataInfo.OffsetPtr + CountIdx * 4);
+
+		if (RandomDataAOffset != -1)
+			RandomDataBytes.Add(AnimBuffers[CountIdx].GetData() + RandomDataAOffset);
+		else
+			RandomDataBytes.Add(nullptr);
+		if (RandomDataBOffset != -1)
+			RandomDataShorts.Add(reinterpret_cast<int16*>(AnimBuffers[CountIdx].GetData() + RandomDataBOffset));
+		else
+			RandomDataShorts.Add(nullptr);
+	}
+	FMW6XAnimBufferState State;
+	State.OffsetCount = AnimHeader.DataInfo.OffsetCount;
+	State.PackedPerFrameInfo = AnimPackedInfo;
+
+	int32 CurrentBoneIndex = 0;
+	int32 CurrentSize = InAnim.NoneRotatedBoneCount;
+	bool ByteFrames = InAnim.FrameCount < 0x100;
+
+	while (CurrentBoneIndex < CurrentSize)
+	{
+		OutAnim.AddRotationKey(InAnim.Reader.BoneNames[CurrentBoneIndex++], 0, FVector4(0, 0, 0, 1));
+	}
+	CurrentSize += InAnim.TwoDRotatedBoneCount;
+	// 2D Bones
+	while (CurrentBoneIndex < CurrentSize)
+	{
+		int16 TableSize = *DataShort++;
+
+		if ((TableSize >= 0x40) && !ByteFrames)
+			DataShort += ((TableSize - 1) >> 8) + 2;
+
+		for (int16 Idx = 0; Idx <= TableSize; ++Idx)
+		{
+			uint32 Frame = 0;
+			if (ByteFrames)
+			{
+				Frame = *DataByte++;
+			}
+			else
+			{
+				Frame = TableSize >= 0x40 ? *Indices++ : *DataShort++;
+			}
+			MW6XAnimCalculateBufferIndex(&State, TableSize + 1, Idx);
+			int16* RandomDataShort = RandomDataShorts[State.BufferIndex] + 2 * State.BufferOffset;
+			float RZ = (float)RandomDataShort[0] * 0.000030518509f;
+			float RW = (float)RandomDataShort[1] * 0.000030518509f;
+
+			OutAnim.AddRotationKey(InAnim.Reader.BoneNames[CurrentBoneIndex], Frame, FVector4(0, 0, RZ, RW));
+		}
+		MW6XAnimIncrementBuffers(&State, TableSize + 1, 2, RandomDataShorts);
+		CurrentBoneIndex++;
+	}
+
+	CurrentSize += InAnim.NormalRotatedBoneCount;
+	// 3D Rotations
+	while (CurrentBoneIndex < CurrentSize)
+	{
+		int16 TableSize = *DataShort++;
+		if ((TableSize >= 0x40) && !ByteFrames)
+			DataShort += ((TableSize - 1) >> 8) + 2;
+		for (int32 i = 0; i < TableSize + 1; ++i)
+		{
+			uint32 Frame = 0;
+			if (ByteFrames)
+			{
+				Frame = *DataByte++;
+			}
+			else
+			{
+				Frame = TableSize >= 0x40 ? *Indices++ : *DataShort++;
+			}
+			MW6XAnimCalculateBufferIndex(&State, TableSize + 1, i);
+
+			int16* RandomDataShort = RandomDataShorts[State.BufferIndex] + 4 * State.BufferOffset;
+			float RX = (float)RandomDataShort[0] * 0.000030518509f;
+			float RY = (float)RandomDataShort[1] * 0.000030518509f;
+			float RZ = (float)RandomDataShort[2] * 0.000030518509f;
+			float RW = (float)RandomDataShort[3] * 0.000030518509f;
+
+			OutAnim.AddRotationKey(InAnim.Reader.BoneNames[CurrentBoneIndex], Frame, FVector4(RX, RY, RZ, RW));
+		}
+		MW6XAnimIncrementBuffers(&State, TableSize + 1, 4, RandomDataShorts);
+		CurrentBoneIndex++;
+	}
+
+	CurrentSize += InAnim.TwoDStaticRotatedBoneCount;
+	// 2D Static Rotations
+	while (CurrentBoneIndex < CurrentSize)
+	{
+		float RZ = (float)*DataShort++ * 0.000030518509f;
+		float RW = (float)*DataShort++ * 0.000030518509f;
+
+		OutAnim.AddRotationKey(InAnim.Reader.BoneNames[CurrentBoneIndex++], 0, FVector4(0, 0, RZ, RW));
+	}
+	CurrentSize += InAnim.NormalStaticRotatedBoneCount;
+	// 3D Static Rotations
+	while (CurrentBoneIndex < CurrentSize)
+	{
+		float RX = (float)*DataShort++ * 0.000030518509f;
+		float RY = (float)*DataShort++ * 0.000030518509f;
+		float RZ = (float)*DataShort++ * 0.000030518509f;
+		float RW = (float)*DataShort++ * 0.000030518509f;
+
+		OutAnim.AddRotationKey(InAnim.Reader.BoneNames[CurrentBoneIndex++], 0, FVector4(RX, RY, RZ, RW));
+	}
+
+	CurrentBoneIndex = 0;
+	CurrentSize = InAnim.NormalTranslatedBoneCount;
+	while (CurrentBoneIndex++ < CurrentSize)
+	{
+		int16 BoneIndex = *DataShort++;
+		int16 TableSize = *DataShort++;
+		if ((TableSize >= 0x40) && !ByteFrames)
+			DataShort += ((TableSize - 1) >> 8) + 2;
+		float MinsVecX = *(float*)DataInt++;
+		float MinsVecY = *(float*)DataInt++;
+		float MinsVecZ = *(float*)DataInt++;
+		float FrameVecX = *(float*)DataInt++;
+		float FrameVecY = *(float*)DataInt++;
+		float FrameVecZ = *(float*)DataInt++;
+		for (int32 i = 0; i <= TableSize; ++i)
+		{
+			int32 Frame = 0;
+			if (ByteFrames)
+			{
+				Frame = *DataByte++;
+			}
+			else
+			{
+				Frame = TableSize >= 0x40 ? *Indices++ : *DataShort++;
+			}
+			MW6XAnimCalculateBufferIndex(&State, TableSize + 1, i);
+
+			uint8* RandomDataByte = RandomDataBytes[State.BufferIndex] + 3 * State.BufferOffset;
+			float TranslationX = (FrameVecX * (float)RandomDataByte[0]) + MinsVecX;
+			float TranslationY = (FrameVecY * (float)RandomDataByte[1]) + MinsVecY;
+			float TranslationZ = (FrameVecZ * (float)RandomDataByte[2]) + MinsVecZ;
+
+			OutAnim.AddTranslationKey(InAnim.Reader.BoneNames[BoneIndex], Frame,
+			                          FVector(TranslationX, TranslationY, TranslationZ));
+		}
+		MW6XAnimIncrementBuffers(&State, TableSize + 1, 3, RandomDataBytes);
+	}
+	CurrentBoneIndex = 0;
+	CurrentSize = InAnim.PreciseTranslatedBoneCount;
+	while (CurrentBoneIndex++ < CurrentSize)
+	{
+		int16 BoneIndex = *DataShort++;
+		int16 TableSize = *DataShort++;
+
+		if ((TableSize >= 0x40) && !ByteFrames)
+			DataShort += ((TableSize - 1) >> 8) + 2;
+		float MinsVecX = *(float*)DataInt++;
+		float MinsVecY = *(float*)DataInt++;
+		float MinsVecZ = *(float*)DataInt++;
+		float FrameVecX = *(float*)DataInt++;
+		float FrameVecY = *(float*)DataInt++;
+		float FrameVecZ = *(float*)DataInt++;
+
+		for (int i = 0; i <= TableSize; ++i)
+		{
+			int Frame = 0;
+			if (ByteFrames)
+			{
+				Frame = *DataByte++;
+			}
+			else
+			{
+				Frame = TableSize >= 0x40 ? *Indices++ : *DataShort++;
+			}
+			MW6XAnimCalculateBufferIndex(&State, TableSize + 1, i);
+			int16* RandomDataShort = RandomDataShorts[State.BufferIndex] + 3 * State.BufferOffset;
+
+			float TranslationX = (FrameVecX * (float)(uint16)RandomDataShort[0]) + MinsVecX;
+			float TranslationY = (FrameVecY * (float)(uint16)RandomDataShort[1]) + MinsVecY;
+			float TranslationZ = (FrameVecZ * (float)(uint16)RandomDataShort[2]) + MinsVecZ;
+
+			OutAnim.AddTranslationKey(InAnim.Reader.BoneNames[BoneIndex], Frame,
+			                          FVector(TranslationX, TranslationY, TranslationZ));
+		}
+		MW6XAnimIncrementBuffers(&State, TableSize + 1, 3, RandomDataShorts);
+	}
+	CurrentBoneIndex = 0;
+	CurrentSize = InAnim.StaticTranslatedBoneCount;
+	while (CurrentBoneIndex++ < CurrentSize)
+	{
+		FVector3f Vec = *(FVector3f*)DataInt;
+		DataInt += 3;
+		int16 BoneIndex = *DataShort++;
+
+		OutAnim.AddTranslationKey(InAnim.Reader.BoneNames[BoneIndex], 0, FVector(Vec));
+	}
+}
+
 void FModernWarfare6::LoadXModel(TSharedPtr<FGameProcess> ProcessInstance, FWraithXModel& BaseModel,
                                  FWraithXModelLod& ModelLod, FCastModelInfo& ResultModel)
 {
@@ -425,6 +722,60 @@ void FModernWarfare6::LoadXModel(TSharedPtr<FGameProcess> ProcessInstance, FWrai
 			Mesh.Faces.Add(Faces[2]);
 			Mesh.Faces.Add(Faces[1]);
 			Mesh.Faces.Add(Faces[0]);
+		}
+	}
+}
+
+int32 FModernWarfare6::MW6XAnimCalculateBufferOffset(const FMW6XAnimBufferState* AnimState, const int32 Index,
+                                                     const int32 Count)
+{
+	if (Count == 0)
+		return 0;
+
+	int32 Mask = Index + Count - 1;
+	int32 Start = Index >> 5;
+	int32 End = Mask >> 5;
+	int32 Result = 0;
+
+	for (int32 i = Start; i <= End; i++)
+	{
+		if (AnimState->PackedPerFrameInfo[i] == 0)
+			continue;
+
+		uint32 maskA = 0xFFFFFFFF;
+		uint32 maskB = 0xFFFFFFFF;
+
+		// If we're at the start or end, we need to calculate trailing bit masks.
+		if (i == Start)
+			maskA = 0xFFFFFFFF >> (Index & 0x1F);
+		if (i == End)
+			maskB = 0xFFFFFFFF << (31 - (Mask & 0x1F));
+
+		Result += FPlatformMath::CountBits(AnimState->PackedPerFrameInfo[i] & maskA & maskB);
+	}
+
+	return Result;
+}
+
+void FModernWarfare6::MW6XAnimCalculateBufferIndex(FMW6XAnimBufferState* AnimState, const int32 TableSize,
+                                                   const int32 KeyFrameIndex)
+{
+	if (TableSize < 4 || AnimState->OffsetCount == 1)
+	{
+		AnimState->BufferIndex = 0;
+		AnimState->BufferOffset = KeyFrameIndex;
+	}
+	else
+	{
+		for (int32 i = 0; i < AnimState->OffsetCount; ++i)
+		{
+			if (((0x80000000 >> ((KeyFrameIndex + (i * TableSize) + AnimState->PackedPerFrameOffset) & 0x1F)) & AnimState->PackedPerFrameInfo[(KeyFrameIndex + (i * TableSize) + AnimState->PackedPerFrameOffset) >> 5]) != 0)
+			{
+				AnimState->BufferIndex = i;
+				AnimState->BufferOffset = MW6XAnimCalculateBufferOffset(
+					AnimState, AnimState->PackedPerFrameOffset + TableSize * AnimState->BufferIndex, KeyFrameIndex);
+				return;
+			}
 		}
 	}
 }

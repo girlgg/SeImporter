@@ -2,16 +2,17 @@
 
 #include "DesktopPlatformModule.h"
 #include "Framework/Notifications/NotificationManager.h"
+#include "Localization/IWToUELocalizationManager.h"
 #include "Widgets/Input/SSearchBox.h"
 #include "Widgets/Notifications/SNotificationList.h"
 #include "Widgets/Notifications/SProgressBar.h"
+#include "WraithX/SSettingsDialog.h"
 
 void SWraithXWidget::Construct(const FArguments& InArgs)
 {
 	ChildSlot
 	[
 		SNew(SVerticalBox)
-
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		[
@@ -20,7 +21,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 			.FillWidth(0.7f)
 			[
 				SAssignNew(SearchBox, SSearchBox)
-				.HintText(INVTEXT("Search assets..."))
+				.HintText(FIWToUELocalizationManager::Get().GetText("SearchBoxHint"))
 				.OnTextChanged(this, &SWraithXWidget::HandleSearchChanged)
 				.IsEnabled_Lambda([this]() { return !bIsLoading; })
 			]
@@ -28,7 +29,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 			.AutoWidth()
 			[
 				SNew(SButton)
-				.Text(INVTEXT("Search"))
+				.Text(FIWToUELocalizationManager::Get().GetText("SearchButton"))
 				.OnClicked(this, &SWraithXWidget::HandleSearchButton)
 				.IsEnabled_Lambda([this]() { return !bIsLoading; })
 			]
@@ -36,7 +37,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 			.AutoWidth()
 			[
 				SNew(SButton)
-				.Text(INVTEXT("Clear"))
+				.Text(FIWToUELocalizationManager::Get().GetText("ClearButton"))
 				.OnClicked(this, &SWraithXWidget::HandleClearSearchText)
 				.IsEnabled_Lambda([this]() { return !bIsLoading; })
 			]
@@ -45,6 +46,38 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 			[
 				SAssignNew(AssetCountText, STextBlock)
 				.Justification(ETextJustify::Right)
+			]
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			[
+				SNew(SComboButton) // 组合按钮带下拉菜单
+				.ButtonContent()
+				[
+					SNew(STextBlock)
+					.Text(INVTEXT("Filter"))
+				]
+				.MenuContent()
+				[
+					SNew(SVerticalBox)
+					+ SVerticalBox::Slot()
+					.AutoHeight()
+					[
+						SNew(SHorizontalBox)
+						+ SHorizontalBox::Slot()
+						.FillWidth(1.0f)
+						[
+							SNew(SEditableTextBox)
+							.HintText(INVTEXT("Asset Name Contains"))
+							.OnTextCommitted_Lambda([this](const FText& Text, ETextCommit::Type)
+							{
+								// DataManager->SetColumnFilter("AssetName", Text.ToString());
+								// DataManager->ApplyFiltersAndSort();
+								// ListView->RequestListRefresh();
+							})
+						]
+					]
+					// 添加其他列的筛选条件...
+				]
 			]
 		]
 
@@ -64,25 +97,25 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 				[
 					SAssignNew(HeaderRow, SHeaderRow)
 					+ SHeaderRow::Column(FName("AssetName"))
-					.DefaultLabel(INVTEXT("Asset Name"))
+					.DefaultLabel(FIWToUELocalizationManager::Get().GetText("AssetName"))
 					.FillWidth(0.4f)
 					.SortMode(this, &SWraithXWidget::GetSortMode, FName("AssetName"))
 					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
 
 					+ SHeaderRow::Column(FName("Status"))
-					.DefaultLabel(INVTEXT("Status"))
+					.DefaultLabel(FIWToUELocalizationManager::Get().GetText("Status"))
 					.FillWidth(0.2f)
 					.SortMode(this, &SWraithXWidget::GetSortMode, FName("Status"))
 					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
 
 					+ SHeaderRow::Column(FName("Type"))
-					.DefaultLabel(INVTEXT("Type"))
+					.DefaultLabel(FIWToUELocalizationManager::Get().GetText("Type"))
 					.FillWidth(0.2f)
 					.SortMode(this, &SWraithXWidget::GetSortMode, FName("Type"))
 					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
 
 					+ SHeaderRow::Column(FName("Size"))
-					.DefaultLabel(INVTEXT("Size"))
+					.DefaultLabel(FIWToUELocalizationManager::Get().GetText("Size"))
 					.FillWidth(0.2f)
 					.SortMode(this, &SWraithXWidget::GetSortMode, FName("Size"))
 					.OnSort(this, &SWraithXWidget::OnSortColumnChanged)
@@ -130,14 +163,14 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 					.FillWidth(1.0f)
 					[
 						SAssignNew(ImportPathInput, SEditableTextBox)
-						.HintText(INVTEXT("Import Path (e.g. /Game/Subfolder)"))
+						.HintText(FIWToUELocalizationManager::Get().GetText("ImportPathHint"))
 						.IsEnabled_Lambda([this]() { return !bIsLoading; })
 						.OnTextCommitted_Lambda([this](const FText& InText, ETextCommit::Type CommitType)
 						{
 							FString Path = InText.ToString();
 							if (!Path.IsEmpty() && !Path.StartsWith("/Game/"))
 							{
-								FNotificationInfo Info(INVTEXT("路径必须以/Game/开头"));
+								FNotificationInfo Info(FIWToUELocalizationManager::Get().GetText("PathErrorHint"));
 								Info.ExpireDuration = 3.0f;
 								FSlateNotificationManager::Get().AddNotification(Info);
 								ImportPathInput->SetText(FText::GetEmpty());
@@ -149,7 +182,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 					.Padding(5.0f, 0.0f, 0.0f, 0.0f)
 					[
 						SNew(SButton)
-						.Text(INVTEXT("浏览..."))
+						.Text(FIWToUELocalizationManager::Get().GetText("Browse"))
 						.OnClicked_Lambda([this]()
 						{
 							IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
@@ -165,7 +198,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 								FString SelectedPath;
 								if (DesktopPlatform->OpenDirectoryDialog(
 									ParentWindowHandle,
-									TEXT("选择导入目录"),
+									*FIWToUELocalizationManager::Get().GetString("BrowseHint"),
 									FPaths::ProjectContentDir(),
 									SelectedPath))
 								{
@@ -177,7 +210,8 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 									}
 									else
 									{
-										FNotificationInfo Info(INVTEXT("必须选择项目Content目录下的文件夹"));
+										FNotificationInfo Info(
+											FIWToUELocalizationManager::Get().GetText("BrowseErrorHint"));
 										Info.ExpireDuration = 3.0f;
 										FSlateNotificationManager::Get().AddNotification(Info);
 									}
@@ -190,7 +224,7 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 				+ SHorizontalBox::Slot()
 				[
 					SAssignNew(OptionalParamsInput, SEditableTextBox)
-					.HintText(INVTEXT("Optional Parameters"))
+					.HintText(FIWToUELocalizationManager::Get().GetText("OptionalParameters"))
 					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 			]
@@ -203,30 +237,37 @@ void SWraithXWidget::Construct(const FArguments& InArgs)
 				+ SHorizontalBox::Slot()
 				[
 					SNew(SButton)
-					.Text(INVTEXT("Load Game"))
+					.Text(FIWToUELocalizationManager::Get().GetText("LoadGame"))
 					.OnClicked(this, &SWraithXWidget::HandleLoadGame)
 					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 				+ SHorizontalBox::Slot()
 				[
 					SNew(SButton)
-					.Text(INVTEXT("Refresh File"))
+					.Text(FIWToUELocalizationManager::Get().GetText("RefreshFile"))
 					.OnClicked(this, &SWraithXWidget::HandleRefreshGame)
 					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 				+ SHorizontalBox::Slot()
 				[
 					SNew(SButton)
-					.Text(INVTEXT("Import Selected"))
+					.Text(FIWToUELocalizationManager::Get().GetText("ImportSelected"))
 					.OnClicked(this, &SWraithXWidget::HandleImportSelected)
 					.IsEnabled_Lambda([this]() { return !bIsLoading; })
 				]
 				+ SHorizontalBox::Slot()
 				[
 					SNew(SButton)
-					.Text(INVTEXT("Import All"))
+					.Text(FIWToUELocalizationManager::Get().GetText("ImportAll"))
 					.OnClicked(this, &SWraithXWidget::HandleImportAll)
 					.IsEnabled_Lambda([this]() { return !bIsLoading; })
+				]
+				+ SHorizontalBox::Slot()
+				.AutoWidth()
+				[
+					SNew(SButton)
+					.Text(INVTEXT("Settings"))
+					.OnClicked(this, &SWraithXWidget::HandleSettingsButton)
 				]
 			]
 		]
@@ -402,6 +443,23 @@ FReply SWraithXWidget::HandleImportAll()
 {
 	UE_LOG(LogTemp, Display, TEXT("Importing all %d items"),
 	       FilteredItems.Num());
+	return FReply::Handled();
+}
+
+FReply SWraithXWidget::HandleSettingsButton()
+{
+	TSharedRef<SWindow> SettingsWindow = SNew(SWindow)
+	.Title(INVTEXT("WraithX 设置"))
+	.ClientSize(FVector2D(800, 600))
+	.SizingRule(ESizingRule::UserSized);
+
+	SettingsWindow->SetContent(
+		SNew(SSettingsDialog)
+	);
+
+	// 确保模态显示
+	FSlateApplication::Get().AddModalWindow(SettingsWindow, FSlateApplication::Get().GetActiveTopLevelWindow());
+    
 	return FReply::Handled();
 }
 

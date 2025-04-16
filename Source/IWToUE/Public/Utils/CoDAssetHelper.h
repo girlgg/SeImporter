@@ -11,8 +11,16 @@ namespace FCoDAssetHelper
 
 namespace FCoDMeshHelper
 {
-	uint8 FindFaceIndex(TSharedPtr<FGameProcess> ProcessInstance, uint64 PackedIndices, uint32 Index, uint8 Bits, bool IsLocal = false);
+	uint8 FindFaceIndex(TSharedPtr<FGameProcess> ProcessInstance, uint64 PackedIndices, uint32 Index, uint8 Bits,
+	                    bool IsLocal = false);
 
-	bool UnpackFaceIndices(TSharedPtr<FGameProcess> ProcessInstance, TArray<uint16>& InFacesArr, uint64 Tables, uint64 TableCount, uint64 PackedIndices,
+	bool UnpackFaceIndices(TSharedPtr<FGameProcess> ProcessInstance, TArray<uint16>& InFacesArr, uint64 Tables,
+	                       uint64 TableCount, uint64 PackedIndices,
 	                       uint64 Indices, uint64 FaceIndex, const bool IsLocal = false);
+};
+
+namespace VectorPacking
+{
+	FVector4 QuatPackingA(const uint64 PackedData);
+	FVector4 QuatPacking2DA(const uint32 PackedData);
 };
