@@ -30,12 +30,12 @@ public class IWToUE : ModuleRules
 			{
 				"Core",
 				"PhysicsCore",
-				"PhysicsUtilities", 
+				"PhysicsUtilities",
 				"OodleDataCompression",
 				"SQLiteCore",
 				"SQLiteSupport",
 				"Projects",
-				"Opus"
+				"libOpus"
 			}
 		);
 
