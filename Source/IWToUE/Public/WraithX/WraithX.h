@@ -21,9 +21,8 @@ public:
 	void ImportAnim(FString ImportPath, TSharedPtr<FCoDAsset> Asset);
 	void ImportModel(FString ImportPath, TSharedPtr<FCoDAsset> Asset);
 	void ImportImage(FString ImportPath, TSharedPtr<FCoDAsset> Asset);
-	// void ImportSound(TSharedPtr<FCoDAsset> Asset);
-	// void ImportMaterial(TSharedPtr<FCoDAsset> Asset);
-	// void ImportRawFile(TSharedPtr<FCoDAsset> Asset);
+	void ImportSound(FString ImportPath,TSharedPtr<FCoDAsset> Asset);
+	void ImportMaterial(FString ImportPath,TSharedPtr<FCoDAsset> Asset);
 	void ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>> Selection);
 
 	void LoadGenericAnimAsset(FWraithXAnim& OutAnim, TSharedPtr<FCoDAnim> AnimInfo);

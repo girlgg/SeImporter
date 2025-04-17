@@ -34,7 +34,8 @@ public class IWToUE : ModuleRules
 				"OodleDataCompression",
 				"SQLiteCore",
 				"SQLiteSupport",
-				"Projects"
+				"Projects",
+				"Opus"
 			}
 		);
 

@@ -1,3 +1,18 @@
+# Opus
+Source/ThirdParty/Opus/*
+!Source/ThirdParty/Opus/include/
+!Source/ThirdParty/Opus/include/**
+!Source/ThirdParty/Opus/lib/
+!Source/ThirdParty/Opus/lib/**
+!Source/ThirdParty/Opus/Opus.Build.cs
+
+Source/ThirdParty/Opus/meson.build
+Source/ThirdParty/Opus/CMakeLists.txt
+Source/ThirdParty/Opus/*.md
+Source/ThirdParty/Opus/LICENSE
+Source/ThirdParty/Opus/.git
+Source/ThirdParty/Opus/.gitignore
+
 # custom files
 *.wni
 *.dat

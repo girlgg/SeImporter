@@ -3,6 +3,7 @@
 #include "CastManager/CastAnimation.h"
 #include "CDN/CoDCDNDownloader.h"
 #include "Structures/MW6SPGameStructures.h"
+#include "ThirdSupport/SABSupport.h"
 #include "Utils/CoDAssetHelper.h"
 #include "Utils/CoDBonesHelper.h"
 #include "WraithX/CoDAssetType.h"
@@ -341,6 +342,29 @@ bool FModernWarfare6::ReadXMaterial(FWraithXMaterial& OutMaterial, TSharedPtr<FG
 	}
 
 	return true;
+}
+
+bool FModernWarfare6::ReadXSound(FWraithXSound& OutSound, TSharedPtr<FGameProcess> ProcessInstance,
+                                 TSharedPtr<FCoDAsset> InSound)
+{
+	FMW6SoundAsset SoundData = ProcessInstance->ReadMemory<FMW6SoundAsset>(InSound->AssetPointer);
+	if (SoundData.StreamKey)
+	{
+		TArray<uint8> SoundBuffer = ProcessInstance->GetDecrypt()->ExtractXSubPackage(
+			SoundData.StreamKey, ((SoundData.Size + SoundData.SeekTableSize + 4095) & 0xFFFFFFFFFFFFFFF0));
+		if (SoundBuffer.IsEmpty()) return false;
+		SoundBuffer.RemoveAt(0, SoundData.SeekTableSize);
+		return SABSupport::DecodeOpusInterLeaved(OutSound, SoundBuffer,
+		                                         0, SoundData.FrameRate,
+		                                         SoundData.ChannelCount, SoundData.FrameCount);
+	}
+	TArray<uint8> SoundBuffer = ProcessInstance->GetDecrypt()->ExtractXSubPackage(
+		SoundData.StreamKeyEx, ((SoundData.LoadedSize + SoundData.SeekTableSize + 4095) & 0xFFFFFFFFFFFFFFF0));
+	if (SoundBuffer.IsEmpty()) return false;
+	SoundBuffer.RemoveAt(0, 32 + SoundData.SeekTableSize);
+	return SABSupport::DecodeOpusInterLeaved(OutSound, SoundBuffer,
+	                                         0, SoundData.FrameRate,
+	                                         SoundData.ChannelCount, SoundData.FrameCount);
 }
 
 void FModernWarfare6::LoadXAnim(TSharedPtr<FGameProcess> ProcessInstance, FWraithXAnim& InAnim,
@@ -769,7 +793,10 @@ void FModernWarfare6::MW6XAnimCalculateBufferIndex(FMW6XAnimBufferState* AnimSta
 	{
 		for (int32 i = 0; i < AnimState->OffsetCount; ++i)
 		{
-			if (((0x80000000 >> ((KeyFrameIndex + (i * TableSize) + AnimState->PackedPerFrameOffset) & 0x1F)) & AnimState->PackedPerFrameInfo[(KeyFrameIndex + (i * TableSize) + AnimState->PackedPerFrameOffset) >> 5]) != 0)
+			if (((0x80000000 >> ((KeyFrameIndex + (i * TableSize) + AnimState->PackedPerFrameOffset) & 0x1F)) &
+					AnimState->PackedPerFrameInfo[(KeyFrameIndex + (i * TableSize) + AnimState->PackedPerFrameOffset) >>
+						5])
+				!= 0)
 			{
 				AnimState->BufferIndex = i;
 				AnimState->BufferOffset = MW6XAnimCalculateBufferOffset(

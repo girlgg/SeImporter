@@ -20,17 +20,5 @@
       "Type": "Editor",
       "LoadingPhase": "Default"
     }
-  ],
-  "LocalizationTargets": [
-    {
-      "Name": "IWToUELocalization",
-      "ManifestPath": "Resources/Localization/IWToUE.manifest",
-      "ArchivePath": "Resources/Localization/IWToUE.archive",
-      "LoadingPolicy": "Editor",
-      "NativeCulture": "en-US",
-      "CulturesToGenerate": [
-        "en-US", "zh-CN"
-      ]
-    }
   ]
 }

@@ -486,4 +486,21 @@ struct FCastBoneTransform
 	float TranslationWeight; // 4 bytes
 };
 
+enum class ESoundDataTypes
+{
+	Wav_WithHeader,
+	Wav_NeedsHeader,
+	Flac_WithHeader,
+	Flac_NeedsHeader,
+	Opus_Interleaved,
+	Opus_Interleaved_Streamed,
+};
+
+struct FWraithXSound
+{
+	TArray<uint8> Data;
+	uint32 DataSize;
+	ESoundDataTypes DataType;
+};
+
 #undef LOCTEXT_NAMESPACE

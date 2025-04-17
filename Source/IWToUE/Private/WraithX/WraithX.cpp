@@ -149,6 +149,26 @@ void FWraithX::ImportImage(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
 	}
 }
 
+void FWraithX::ImportSound(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
+{
+	TSharedPtr<FCoDSound> Sound = StaticCastSharedPtr<FCoDSound>(Asset);
+
+	FWraithXSound OutSound;
+	
+	switch (ProcessInstance->GetCurrentGameType())
+	{
+	case CoDAssets::ESupportedGames::ModernWarfare6:
+		FModernWarfare6::ReadXSound(OutSound, ProcessInstance, Sound);
+		break;
+	default:
+		break;
+	}
+}
+
+void FWraithX::ImportMaterial(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
+{
+}
+
 void FWraithX::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>> Selection)
 {
 	for (auto& Asset : Selection)
@@ -165,10 +185,12 @@ void FWraithX::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>>
 			ImportModel(ImportPath, Asset);
 			break;
 		case EWraithAssetType::Sound:
+			ImportSound(ImportPath, Asset);
 			break;
 		case EWraithAssetType::RawFile:
 			break;
 		case EWraithAssetType::Material:
+			ImportMaterial(ImportPath, Asset);
 			break;
 		default:
 			break;

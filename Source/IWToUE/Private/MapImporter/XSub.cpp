@@ -222,6 +222,7 @@ TArray<uint8> FXSub::ExtractXSubPackage(uint64 Key, uint32 Size)
 
 	TArray<FXSubBlock> Blocks;
 	TArray<uint8> CompressedData;
+	uint64 BlockDataSize = 0;
 
 	while (BlockPosition < BlockEnd)
 	{
@@ -262,27 +263,20 @@ TArray<uint8> FXSub::ExtractXSubPackage(uint64 Key, uint32 Size)
 			{
 			case 6:
 				{
-					uint64 Result = OodleLZ_Decompress(CompressedBlockPtr,
-					                                   Block.CompressedSize,
-					                                   DecompressedPtr,
-					                                   Block.DecompressedSize,
-					                                   OodleLZ_FuzzSafe_No,
-					                                   OodleLZ_CheckCRC_No,
-					                                   OodleLZ_Verbosity_None,
-					                                   nullptr,
-					                                   0,
-					                                   nullptr,
-					                                   nullptr,
-					                                   nullptr,
-					                                   0,
-					                                   OodleLZ_Decode_ThreadPhaseAll);
-
-					if (Result != Block.DecompressedSize)
-					{
-						UE_LOG(LogTemp, Error, TEXT("Failed to decompress Oodle buffer, expected %u got %llu"),
-						       Block.DecompressedSize, Result);
-						return TArray<uint8>();
-					}
+					BlockDataSize += OodleLZ_Decompress(CompressedBlockPtr,
+					                                    Block.CompressedSize,
+					                                    DecompressedPtr,
+					                                    Block.DecompressedSize,
+					                                    OodleLZ_FuzzSafe_No,
+					                                    OodleLZ_CheckCRC_No,
+					                                    OodleLZ_Verbosity_None,
+					                                    nullptr,
+					                                    0,
+					                                    nullptr,
+					                                    nullptr,
+					                                    nullptr,
+					                                    0,
+					                                    OodleLZ_Decode_ThreadPhaseAll);
 				}
 				break;
 			default:
@@ -299,6 +293,7 @@ TArray<uint8> FXSub::ExtractXSubPackage(uint64 Key, uint32 Size)
 		}
 	}
 
+	DecompressedData.SetNum(BlockDataSize);
 	return DecompressedData;
 }
 
