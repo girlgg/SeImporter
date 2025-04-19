@@ -13,15 +13,15 @@ void FWraithX::InitializeGame()
 		ProcessInstance.Reset();
 	}
 	ProcessInstance = MakeShared<FGameProcess>();
-	ProcessInstance->OnOnAssetLoadingDelegate.AddRaw(this, &FWraithX::OnAssetLoadingCall);
-	FCoDAssetDatabase::Get().GetTaskCompletedHandle().AddRaw(this, &FWraithX::OnAssetInitCompletedCall);
+	// ProcessInstance->OnOnAssetLoadingDelegate.AddRaw(this, &FWraithX::OnAssetLoadingCall);
+	// FCoDAssetDatabase::Get().GetTaskCompletedHandle().AddRaw(this, &FWraithX::OnAssetInitCompletedCall);
 }
 
 void FWraithX::RefreshGame()
 {
 	if (ProcessInstance)
 	{
-		ProcessInstance->LoadGameFromParasyte();
+		// ProcessInstance->LoadGameFromParasyte();
 		FCoDAssetDatabase::Get().GetTaskCompletedHandle().AddRaw(this, &FWraithX::OnAssetInitCompletedCall);
 	}
 }
@@ -154,7 +154,7 @@ void FWraithX::ImportSound(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
 	TSharedPtr<FCoDSound> Sound = StaticCastSharedPtr<FCoDSound>(Asset);
 
 	FWraithXSound OutSound;
-	
+
 	switch (ProcessInstance->GetCurrentGameType())
 	{
 	case CoDAssets::ESupportedGames::ModernWarfare6:
@@ -167,6 +167,17 @@ void FWraithX::ImportSound(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
 
 void FWraithX::ImportMaterial(FString ImportPath, TSharedPtr<FCoDAsset> Asset)
 {
+	TSharedPtr<FCoDMaterial> Material = StaticCastSharedPtr<FCoDMaterial>(Asset);
+	FWraithXMaterial XMaterial;
+
+	switch (ProcessInstance->GetCurrentGameType())
+	{
+	case CoDAssets::ESupportedGames::ModernWarfare6:
+		FModernWarfare6::ReadXMaterial(XMaterial, ProcessInstance, Material->AssetPointer);
+		break;
+	default:
+		break;
+	}
 }
 
 void FWraithX::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>> Selection)
@@ -343,7 +354,7 @@ void FWraithX::TranslateXAnim(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim)
 
 void FWraithX::DeltaTranslation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim, uint32 FrameSize)
 {
-	uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.DeltaTranslationPtr);
+	/*uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.DeltaTranslationPtr);
 	InAnim.DeltaTranslationPtr += 2;
 	uint8 DataSize = ProcessInstance->ReadMemory<uint8>(InAnim.DeltaTranslationPtr);
 	InAnim.DeltaTranslationPtr += 6;
@@ -396,12 +407,12 @@ void FWraithX::DeltaTranslation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InA
 			OutAnim.AddTranslationKey(TEXT("tag_origin"), FrameIndex,
 			                          FVector(TranslationX, TranslationY, TranslationZ));
 		}
-	}
+	}*/
 }
 
 void FWraithX::Delta2DRotation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim, uint32 FrameSize)
 {
-	const uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.Delta2DRotationsPtr);
+	/*const uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.Delta2DRotationsPtr);
 	InAnim.Delta2DRotationsPtr += 8;
 
 	if (FrameCount)
@@ -479,12 +490,12 @@ void FWraithX::Delta2DRotation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAn
 			auto Rotation = VectorPacking::QuatPacking2DA(*(uint32*)&RotationData);
 			OutAnim.AddRotationKey("tag_origin", FrameIndex, Rotation);
 		}
-	}
+	}*/
 }
 
 void FWraithX::Delta3DRotation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim, uint32 FrameSize)
 {
-	uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.Delta3DRotationsPtr);
+	/*uint32 FrameCount = ProcessInstance->ReadMemory<uint16>(InAnim.Delta3DRotationsPtr);
 	InAnim.Delta3DRotationsPtr += 8;
 
 	if (FrameCount == 0)
@@ -566,7 +577,7 @@ void FWraithX::Delta3DRotation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAn
 			auto Rotation = VectorPacking::QuatPackingA(*(uint64_t*)&RotationData);
 			OutAnim.AddRotationKey("tag_origin", 0, Rotation);
 		}
-	}
+	}*/
 }
 
 void FWraithX::OnAssetInitCompletedCall()
@@ -577,5 +588,5 @@ void FWraithX::OnAssetInitCompletedCall()
 
 void FWraithX::OnAssetLoadingCall(float InProgress)
 {
-	OnOnAssetLoadingDelegate.Broadcast(InProgress);
+	// OnOnAssetLoadingDelegate.Broadcast(InProgress);
 }

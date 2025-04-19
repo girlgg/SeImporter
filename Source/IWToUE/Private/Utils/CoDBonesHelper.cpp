@@ -6,7 +6,7 @@
 void CoDBonesHelper::ReadXModelBones(TSharedPtr<FGameProcess> ProcessInstance, FWraithXModel& BaseModel,
                                      FWraithXModelLod& ModelLod, FCastModelInfo& ResultModel)
 {
-	// 获取骨骼信息
+	/*// 获取骨骼信息
 	uint32 BoneCount = BaseModel.BoneCount + BaseModel.CosmeticBoneCount;
 
 	// TODO 加载不同模型骨骼
@@ -115,13 +115,13 @@ void CoDBonesHelper::ReadXModelBones(TSharedPtr<FGameProcess> ProcessInstance, F
 			Bone.LocalPosition = Bone.WorldPosition;
 			Bone.LocalRotation = Bone.WorldRotation;
 		}
-	}
+	}*/
 }
 
 void CoDBonesHelper::ReadBoneVariantInfo(TSharedPtr<FGameProcess> ProcessInstance, const uint64& ReadAddr,
                                          uint64 BoneLen, int32 BoneIndexSize, BoneIndexVariant& OutBoneParentVariant)
 {
-	switch (BoneIndexSize)
+	/*switch (BoneIndexSize)
 	{
 	case 1:
 		{
@@ -156,5 +156,5 @@ void CoDBonesHelper::ReadBoneVariantInfo(TSharedPtr<FGameProcess> ProcessInstanc
 	default:
 		UE_LOG(LogTemp, Error, TEXT("Unsupported BoneIndexSize: %d"), BoneIndexSize);
 		break;
-	}
+	}*/
 }

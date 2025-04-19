@@ -23,6 +23,7 @@ public:
 	void ImportImage(FString ImportPath, TSharedPtr<FCoDAsset> Asset);
 	void ImportSound(FString ImportPath,TSharedPtr<FCoDAsset> Asset);
 	void ImportMaterial(FString ImportPath,TSharedPtr<FCoDAsset> Asset);
+	
 	void ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>> Selection);
 
 	void LoadGenericAnimAsset(FWraithXAnim& OutAnim, TSharedPtr<FCoDAnim> AnimInfo);
@@ -36,7 +37,6 @@ public:
 	void Delta3DRotation64(FCastAnimationInfo& OutAnim, FWraithXAnim& InAnim, uint32 FrameSize);
 
 	FOnOnAssetInitCompletedDelegate OnOnAssetInitCompletedDelegate;
-	FOnOnAssetLoadingDelegate OnOnAssetLoadingDelegate;
 
 protected:
 	void OnAssetInitCompletedCall();

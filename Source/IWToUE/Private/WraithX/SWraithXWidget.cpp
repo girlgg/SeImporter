@@ -326,7 +326,7 @@ void SWraithXWidget::HandleSearchChanged(const FText& NewText)
 		TArray<TSharedPtr<FCoDAsset>> LocalItems;
 		{
 			FScopeLock Lock(&DataLock);
-			LocalItems = WraithX->GetLoadedAssets();
+			LocalItems = AssetImportManager->GetLoadedAssets();
 		}
 
 		TotalAssetCount = LocalItems.Num();
@@ -405,22 +405,23 @@ void SWraithXWidget::HandleSelectionChanged(TSharedPtr<FCoDAsset> Item, ESelectI
 FReply SWraithXWidget::HandleRefreshGame()
 {
 	bIsLoading = true;
-	LoadingIndicator->SetPercent(0.0f);
 
-	WraithX->RefreshGame();
-	WraithX->OnOnAssetInitCompletedDelegate.AddRaw(this, &SWraithXWidget::LoadInitialAssets);
-	WraithX->OnOnAssetLoadingDelegate.AddRaw(this, &SWraithXWidget::AddLoadingProgress);
+	AssetImportManager->RefreshGame();
+	AssetImportManager->OnAssetInitCompletedDelegate.AddRaw(this, &SWraithXWidget::LoadInitialAssets);
+	AssetImportManager->OnAssetLoadingDelegate.AddRaw(this, &SWraithXWidget::SetLoadingProgress);
+
 	return FReply::Handled();
 }
 
 FReply SWraithXWidget::HandleLoadGame()
 {
 	bIsLoading = true;
-	LoadingIndicator->SetPercent(0.0f);
 
-	WraithX->InitializeGame();
-	WraithX->OnOnAssetInitCompletedDelegate.AddRaw(this, &SWraithXWidget::LoadInitialAssets);
-	WraithX->OnOnAssetLoadingDelegate.AddRaw(this, &SWraithXWidget::AddLoadingProgress);
+	AssetImportManager->InitializeGame();
+	if (!AssetImportManager->OnAssetInitCompletedDelegate.IsBound())
+		AssetImportManager->OnAssetInitCompletedDelegate.AddRaw(this, &SWraithXWidget::LoadInitialAssets);
+	if (!AssetImportManager->OnAssetLoadingDelegate.IsBound())
+		AssetImportManager->OnAssetLoadingDelegate.AddRaw(this, &SWraithXWidget::SetLoadingProgress);
 	return FReply::Handled();
 }
 
@@ -434,7 +435,7 @@ FReply SWraithXWidget::HandleImportSelected()
 		// TODO：关闭所有操作
 		// TODO：导入信息与取消导入
 		// TODO：异步导入
-		WraithX->ImportSelection(ImportPath, Selected);
+		AssetImportManager->ImportSelection(ImportPath, Selected);
 	}
 	return FReply::Handled();
 }
@@ -449,17 +450,16 @@ FReply SWraithXWidget::HandleImportAll()
 FReply SWraithXWidget::HandleSettingsButton()
 {
 	TSharedRef<SWindow> SettingsWindow = SNew(SWindow)
-	.Title(INVTEXT("WraithX 设置"))
-	.ClientSize(FVector2D(800, 600))
-	.SizingRule(ESizingRule::UserSized);
+		.Title(INVTEXT("WraithX 设置"))
+		.ClientSize(FVector2D(800, 600))
+		.SizingRule(ESizingRule::UserSized);
 
 	SettingsWindow->SetContent(
 		SNew(SSettingsDialog)
 	);
 
-	// 确保模态显示
 	FSlateApplication::Get().AddModalWindow(SettingsWindow, FSlateApplication::Get().GetActiveTopLevelWindow());
-    
+
 	return FReply::Handled();
 }
 
@@ -478,11 +478,9 @@ void SWraithXWidget::OnLoadCompleted()
 	LoadingIndicator->SetPercent(1.0f);
 }
 
-void SWraithXWidget::AddLoadingProgress(float InProgress)
+void SWraithXWidget::SetLoadingProgress(float InProgress)
 {
-	CurrentLoadingProgress += InProgress;
-	CurrentLoadingProgress = FMath::Min(CurrentLoadingProgress, 1.f);
-	LoadingIndicator->SetPercent(CurrentLoadingProgress);
+	LoadingIndicator->SetPercent(InProgress);
 }
 
 void SWraithXWidget::OnSortColumnChanged(const EColumnSortPriority::Type SortPriority, const FName& ColumnId,

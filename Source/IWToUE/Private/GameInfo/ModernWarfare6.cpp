@@ -102,7 +102,8 @@ uint64 FModernWarfare6::GetPackedIndicesOffset(const FMW6XSurface& Surface)
 bool FModernWarfare6::ReadXAnim(FWraithXAnim& OutAnim, TSharedPtr<FGameProcess> ProcessInstance,
                                 TSharedPtr<FCoDAnim> AnimAddr)
 {
-	auto AnimData = ProcessInstance->ReadMemory<FMW6XAnim>(AnimAddr->AssetPointer);
+	return false;
+	/*auto AnimData = ProcessInstance->ReadMemory<FMW6XAnim>(AnimAddr->AssetPointer);
 
 	if (AnimData.DataInfo.StreamInfoPtr == 0)
 	{
@@ -151,13 +152,14 @@ bool FModernWarfare6::ReadXAnim(FWraithXAnim& OutAnim, TSharedPtr<FGameProcess> 
 	OutAnim.TranslationType = EAnimationKeyTypes::MinSizeTable;
 	OutAnim.SupportsInlineIndicies = true;
 
-	return true;
+	return true;*/
 }
 
 uint8 FModernWarfare6::ReadXImage(TSharedPtr<FGameProcess> ProcessInstance,
                                   TSharedPtr<FCoDImage> ImageAddr, TArray<uint8>& ImageDataArray)
 {
-	FMW6GfxImage ImageInfo = ProcessInstance->ReadMemory<FMW6GfxImage>(ImageAddr->AssetPointer);
+	return false;
+	/*FMW6GfxImage ImageInfo = ProcessInstance->ReadMemory<FMW6GfxImage>(ImageAddr->AssetPointer);
 
 	if (ImageInfo.LoadedImagePtr)
 	{
@@ -210,20 +212,21 @@ uint8 FModernWarfare6::ReadXImage(TSharedPtr<FGameProcess> ProcessInstance,
 			// HighestIndex = Fallback;
 		}
 	}
-	return ImageInfo.ImageFormat;
+	return ImageInfo.ImageFormat;*/
 }
 
 bool FModernWarfare6::ReadXModel(FWraithXModel& OutModel, TSharedPtr<FGameProcess> ProcessInstance,
                                  TSharedPtr<FCoDModel> ModelAddr)
 {
-	FMW6XModel ModelData = ProcessInstance->ReadMemory<FMW6XModel>(ModelAddr->AssetPointer);
+	return false;
+	/*FMW6XModel ModelData = ProcessInstance->ReadMemory<FMW6XModel>(ModelAddr->AssetPointer);
 	FMW6BoneInfo BoneInfo = ProcessInstance->ReadMemory<FMW6BoneInfo>(ModelData.BoneInfoPtr);
 
 	OutModel.ModelName = ModelAddr->AssetName;
 
 	if (BoneInfo.BoneParentsPtr)
 	{
-		OutModel.BoneCount = BoneInfo.NumBones /*+ BoneInfo.CosmeticBoneCount*/;
+		OutModel.BoneCount = BoneInfo.NumBones /*+ BoneInfo.CosmeticBoneCount#1#;
 		OutModel.RootBoneCount = BoneInfo.NumRootBones;
 	}
 
@@ -293,13 +296,14 @@ bool FModernWarfare6::ReadXModel(FWraithXModel& OutModel, TSharedPtr<FGameProces
 			ReadXMaterial(Material, ProcessInstance, MaterialHandle);
 		}
 	}
-	return true;
+	return true;*/
 }
 
 bool FModernWarfare6::ReadXMaterial(FWraithXMaterial& OutMaterial, TSharedPtr<FGameProcess> ProcessInstance,
                                     uint64 MaterialHandle)
 {
-	if (ProcessInstance->GetCurrentGameFlag() == CoDAssets::ESupportedGameFlags::SP)
+	return false;
+	/*if (ProcessInstance->GetCurrentGameFlag() == CoDAssets::ESupportedGameFlags::SP)
 	{
 		FMW6SPMaterial MaterialData = ProcessInstance->ReadMemory<FMW6SPMaterial>(MaterialHandle);
 	}
@@ -341,13 +345,14 @@ bool FModernWarfare6::ReadXMaterial(FWraithXMaterial& OutMaterial, TSharedPtr<FG
 		}
 	}
 
-	return true;
+	return true;*/
 }
 
 bool FModernWarfare6::ReadXSound(FWraithXSound& OutSound, TSharedPtr<FGameProcess> ProcessInstance,
                                  TSharedPtr<FCoDAsset> InSound)
 {
-	FMW6SoundAsset SoundData = ProcessInstance->ReadMemory<FMW6SoundAsset>(InSound->AssetPointer);
+	return false;
+	/*FMW6SoundAsset SoundData = ProcessInstance->ReadMemory<FMW6SoundAsset>(InSound->AssetPointer);
 	if (SoundData.StreamKey)
 	{
 		TArray<uint8> SoundBuffer = ProcessInstance->GetDecrypt()->ExtractXSubPackage(
@@ -364,13 +369,13 @@ bool FModernWarfare6::ReadXSound(FWraithXSound& OutSound, TSharedPtr<FGameProces
 	SoundBuffer.RemoveAt(0, 32 + SoundData.SeekTableSize);
 	return SABSupport::DecodeOpusInterLeaved(OutSound, SoundBuffer,
 	                                         0, SoundData.FrameRate,
-	                                         SoundData.ChannelCount, SoundData.FrameCount);
+	                                         SoundData.ChannelCount, SoundData.FrameCount);*/
 }
 
 void FModernWarfare6::LoadXAnim(TSharedPtr<FGameProcess> ProcessInstance, FWraithXAnim& InAnim,
                                 FCastAnimationInfo& OutAnim)
 {
-	FMW6XAnim AnimHeader = ProcessInstance->ReadMemory<FMW6XAnim>(InAnim.ReaderInformationPointer);
+	/*FMW6XAnim AnimHeader = ProcessInstance->ReadMemory<FMW6XAnim>(InAnim.ReaderInformationPointer);
 
 	uint8* DataByte = nullptr;
 	int16* DataShort = nullptr;
@@ -605,13 +610,13 @@ void FModernWarfare6::LoadXAnim(TSharedPtr<FGameProcess> ProcessInstance, FWrait
 		int16 BoneIndex = *DataShort++;
 
 		OutAnim.AddTranslationKey(InAnim.Reader.BoneNames[BoneIndex], 0, FVector(Vec));
-	}
+	}*/
 }
 
 void FModernWarfare6::LoadXModel(TSharedPtr<FGameProcess> ProcessInstance, FWraithXModel& BaseModel,
                                  FWraithXModelLod& ModelLod, FCastModelInfo& ResultModel)
 {
-	FMW6XModelSurfs MeshInfo = ProcessInstance->ReadMemory<FMW6XModelSurfs>(ModelLod.LODStreamInfoPtr);
+	/*FMW6XModelSurfs MeshInfo = ProcessInstance->ReadMemory<FMW6XModelSurfs>(ModelLod.LODStreamInfoPtr);
 	FMW6XSurfaceShared BufferInfo = ProcessInstance->ReadMemory<FMW6XSurfaceShared>(MeshInfo.Shared);
 
 	TArray<uint8> MeshDataBuffer;
@@ -747,7 +752,7 @@ void FModernWarfare6::LoadXModel(TSharedPtr<FGameProcess> ProcessInstance, FWrai
 			Mesh.Faces.Add(Faces[1]);
 			Mesh.Faces.Add(Faces[0]);
 		}
-	}
+	}*/
 }
 
 int32 FModernWarfare6::MW6XAnimCalculateBufferOffset(const FMW6XAnimBufferState* AnimState, const int32 Index,

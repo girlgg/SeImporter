@@ -1,3 +1,6 @@
 ﻿#include "SeLogChannels.h"
 
 DEFINE_LOG_CATEGORY(LogCast);
+DEFINE_LOG_CATEGORY(LogITUDatabase);
+DEFINE_LOG_CATEGORY(LogITUAssetImporter);
+DEFINE_LOG_CATEGORY(LogITUMemoryReader);

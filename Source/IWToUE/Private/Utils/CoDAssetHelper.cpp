@@ -157,7 +157,8 @@ bool FCoDAssetHelper::SaveObjectToPackage(UObject* ObjectToSave, const FString& 
 uint8 FCoDMeshHelper::FindFaceIndex(TSharedPtr<FGameProcess> ProcessInstance, uint64 PackedIndices, uint32 Index,
                                     uint8 Bits, bool IsLocal)
 {
-	unsigned long BitIndex;
+	return 0;
+	/*unsigned long BitIndex;
 
 	if (!_BitScanReverse64(&BitIndex, Bits)) BitIndex = 64;
 	else BitIndex ^= 0x3F;
@@ -179,14 +180,15 @@ uint8 FCoDMeshHelper::FindFaceIndex(TSharedPtr<FGameProcess> ProcessInstance, ui
 			BitIndex - (8 - BitOffset))) - 1)) << (8 - BitOffset));
 	}
 
-	return (PackedIndice >> BitOffset) & ((1 << BitCount) - 1);
+	return (PackedIndice >> BitOffset) & ((1 << BitCount) - 1);*/
 }
 
 bool FCoDMeshHelper::UnpackFaceIndices(TSharedPtr<FGameProcess> ProcessInstance, TArray<uint16>& InFacesArr,
                                        uint64 Tables, uint64 TableCount, uint64 PackedIndices, uint64 Indices,
                                        uint64 FaceIndex, const bool IsLocal)
 {
-	InFacesArr.SetNum(3);
+	return false;
+	/*InFacesArr.SetNum(3);
 	uint64 CurrentFaceIndex = FaceIndex;
 	for (int i = 0; i < TableCount; i++)
 	{
@@ -212,7 +214,7 @@ bool FCoDMeshHelper::UnpackFaceIndices(TSharedPtr<FGameProcess> ProcessInstance,
 		}
 		CurrentFaceIndex -= Count;
 	}
-	return false;
+	return false;*/
 }
 
 FVector4 VectorPacking::QuatPackingA(const uint64 PackedData)

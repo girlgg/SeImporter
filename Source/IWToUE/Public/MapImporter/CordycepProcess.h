@@ -110,7 +110,7 @@ private:
 template <typename T>
 T FCordycepProcess::ReadMemory(uint64 Address, bool bIsLocal)
 {
-	T Result;
+	T Result = T();
 	if (bIsLocal)
 	{
 		Result = *reinterpret_cast<T*>(Address);

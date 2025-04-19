@@ -9,10 +9,10 @@
 
 FXSub::FXSub(uint64 GameID, const FString& GamePath)
 {
-	SharedGamePath = GamePath;
-	FPaths::NormalizeFilename(SharedGamePath);
+	// SharedGamePath = GamePath;
+	// FPaths::NormalizeFilename(SharedGamePath);
 	// TODO 异步加载
-	FCoDAssetDatabase::Get().XSub_Initial(GameID, SharedGamePath);
+	// FCoDAssetDatabase::Get().XSub_Initial(GameID, SharedGamePath);
 }
 
 void FXSub::LoadFiles()

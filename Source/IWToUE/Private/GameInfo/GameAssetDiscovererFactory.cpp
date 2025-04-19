@@ -1,0 +1,1 @@
+﻿#include "GameInfo/GameAssetDiscovererFactory.h"

@@ -17,7 +17,8 @@ FCoDAssetDatabase& FCoDAssetDatabase::Get()
 
 void FCoDAssetDatabase::Initialize()
 {
-	FScopeLock Lock(&DatabaseCriticalSection);
+	return;
+	/*FScopeLock Lock(&DatabaseCriticalSection);
 
 	if (!Database.IsValid())
 	{
@@ -49,7 +50,7 @@ void FCoDAssetDatabase::Initialize()
 			ProcessTrackedFiles();
 		}
 	}
-	bIsInitialized = true;
+	bIsInitialized = true;*/
 }
 
 void FCoDAssetDatabase::Shutdown()

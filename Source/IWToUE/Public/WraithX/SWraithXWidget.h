@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "CoDAssetType.h"
 #include "WraithX.h"
+#include "AssetImporter/AssetImportManager.h"
 
 class SProgressBar;
 
@@ -151,9 +152,10 @@ private:
 	void UpdateAssetCount();
 	void OnLoadCompleted();
 
-	void AddLoadingProgress(float InProgress);
+	void SetLoadingProgress(float InProgress);
 
-	void OnSortColumnChanged(const EColumnSortPriority::Type SortPriority, const FName& ColumnId, const EColumnSortMode::Type NewSortMode);
+	void OnSortColumnChanged(const EColumnSortPriority::Type SortPriority, const FName& ColumnId,
+	                         const EColumnSortMode::Type NewSortMode);
 	EColumnSortMode::Type GetSortMode(const FName ColumnId) const;
 	void SortData();
 
@@ -181,6 +183,7 @@ private:
 	FCriticalSection DataLock;
 
 	TUniquePtr<FWraithX> WraithX = MakeUnique<FWraithX>();
+	TUniquePtr<FAssetImportManager> AssetImportManager = MakeUnique<FAssetImportManager>();
 
 	float CurrentLoadingProgress = 0.f;
 	bool bIsLoading = false;

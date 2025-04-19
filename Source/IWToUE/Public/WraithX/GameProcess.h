@@ -20,8 +20,9 @@
 #include "MapImporter/XSub.h"
 #include "WraithX/CoDAssetType.h"
 
+class IGameAssetDiscoverer;
+class IMemoryReader;
 class FCoDCDNDownloader;
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnOnAssetLoadingDelegate, float);
 
 struct FCoDAsset;
 
@@ -58,70 +59,56 @@ struct FXAssetPool64
 	uint64 AssetMemory;
 };
 
-class FGameProcess
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnAssetLoadingProgressDelegate, float);
+DECLARE_MULTICAST_DELEGATE(FOnAssetLoadingCompleteDelegate);
+
+class FGameProcess : public TSharedFromThis<FGameProcess>
 {
 public:
 	FGameProcess();
 	~FGameProcess();
 
-	bool IsRunning();
+	// --- Initialization and Status ---
+	// Finds process, creates reader/discoverer
+	bool Initialize();
+	bool IsInitialized() const { return bIsInitialized; }
+	bool IsGameRunning();
 
-	template <typename T>
-	T ReadMemory(uint64 Address, bool bIsLocal = false);
-	/*!
-	 * @param Address 读取地址
-	 * @param OutArray 输出数组
-	 * @param Length 读取长度
-	 * @return 读取到的字节数
-	 */
-	template <typename T>
-	uint64 ReadArray(uint64 Address, TArray<T>& OutArray, uint64 Length);
-	FString ReadFString(uint64 Address);
-	FString LoadStringEntry(uint64 Index);
+	// --- Asset Loading ---
+	void StartAssetDiscovery();
+	bool IsDiscoveringAssets() const { return bIsDiscovering; }
+	void SetTotalAssetCnt(int32 InCnt) { TotalDiscoveredAssets = InCnt; }
 
 	FORCEINLINE TArray<TSharedPtr<FCoDAsset>>& GetLoadedAssets() { return LoadedAssets; }
 
-	void LoadGameFromParasyte();
+	FORCEINLINE CoDAssets::ESupportedGames GetCurrentGameType() const;
+	FORCEINLINE CoDAssets::ESupportedGameFlags GetCurrentGameFlag() const;
+	FORCEINLINE FCoDCDNDownloader* GetCDNDownloader();
+	TSharedPtr<FXSub> GetDecrypt();
 
-	FOnOnAssetLoadingDelegate OnOnAssetLoadingDelegate;
-
-	FORCEINLINE CoDAssets::ESupportedGames GetCurrentGameType() const { return GameType; }
-	FORCEINLINE CoDAssets::ESupportedGameFlags GetCurrentGameFlag() const { return GameFlag; }
-	FORCEINLINE FCoDCDNDownloader* GetCDNDownloader() const
-	{
-		return CDNDownloader.Get();
-	}
-
-	TSharedPtr<FXSub> GetDecrypt() { return XSubDecrypt; }
+	// --- Delegates ---
+	// Renamed delegate for clarity
+	FOnAssetLoadingProgressDelegate OnAssetLoadingProgress;
+	FOnAssetLoadingCompleteDelegate OnAssetLoadingComplete;
 
 private:
+	// --- Helper Methods ---
+	bool FindTargetProcess();
+	bool OpenProcessHandleAndReader();
+	bool LocateGameInfoViaParasyte();
+	bool CreateAndInitializeDiscoverer();
+
+	// --- Callbacks ---
+	void HandleAssetDiscovered(TSharedPtr<FCoDAsset> DiscoveredAsset);
+	void HandleDiscoveryComplete();
+
 	bool LocateGameInfo();
-
-	FXAsset64 RequestAsset(const uint64& AssetPtr);
-
-	FString ProcessAssetName(FString Name);
-
-	void ProcessAssetPool(int32 PoolOffset, TFunction<void(FXAsset64)> AssetProcessor);
 
 	void ProcessModelAsset(FXAsset64 AssetNode);
 	void ProcessImageAsset(FXAsset64 AssetNode);
 	void ProcessAnimAsset(FXAsset64 AssetNode);
 	void ProcessMaterialAsset(FXAsset64 AssetNode);
 	void ProcessSoundAsset(FXAsset64 AssetNode);
-
-	void AddAssetToCollection(TSharedPtr<FCoDAsset> Asset);
-	template <typename TAssetType, typename TCoDType>
-	void ProcessGenericAsset(FXAsset64 AssetNode,
-	                         const TCHAR* AssetPrefix,
-	                         TFunction<void(const TAssetType&, TSharedPtr<TCoDType>)> Customizer);
-
-	void LoadingProgressAdd(float InAddProgress = 1e-6);
-
-	void LoadAssets();
-
-	DWORD GetProcessId();
-	FString GetProcessPath();
-	HANDLE OpenTargetProcess();
 
 	HANDLE ProcessHandle{nullptr};
 	FString ProcessPath;
@@ -143,55 +130,30 @@ private:
 
 	CoDAssets::ESupportedGames GameType = CoDAssets::ESupportedGames::None;
 	CoDAssets::ESupportedGameFlags GameFlag = CoDAssets::ESupportedGameFlags::None;
+
+	// --- Internal State ---
+	DWORD TargetProcessId = 0;
+	CoDAssets::FCoDGameProcess TargetProcessInfo{};
+	FString TargetProcessPath;
+	TSharedPtr<LocateGameInfo::FParasyteBaseState> ParasyteState;
+	TSharedPtr<IGameAssetDiscoverer> AssetDiscoverer;
+
+	TSharedPtr<IMemoryReader> MemoryReader;
+
+	float TotalDiscoveredAssets = 0.0f;
+	float CurrentDiscoveryProgressCount = 0.0f;
+
+	// --- Async Task Management ---
+	FAsyncTask<class FAssetDiscoveryTask>* DiscoveryTask = nullptr;
+
+	std::atomic<bool> bIsInitialized = false;
+	std::atomic<bool> bIsDiscovering = false;
+
+	friend class FAssetDiscoveryTask;
 };
 
-template <typename T>
-T FGameProcess::ReadMemory(uint64 Address, bool bIsLocal)
-{
-	T Result;
-	if (bIsLocal)
-	{
-		Result = *reinterpret_cast<T*>(Address);
-	}
-	else
-	{
-		static FCriticalSection ProcessHandleCriticalSection;
-		FScopeLock Lock(&ProcessHandleCriticalSection);
 
-		if (ProcessHandle)
-		{
-			SIZE_T BytesRead;
-			if (!::ReadProcessMemory(ProcessHandle, reinterpret_cast<LPCVOID>(Address), &Result, sizeof(T), &BytesRead))
-			{
-				UE_LOG(LogTemp, Error, TEXT("Failed to read memory from address: 0x%llX"), Address);
-				return T();
-			}
-			assert(BytesRead == sizeof(T));
-		}
-	}
-	return Result;
-}
-
-template <typename T>
-uint64 FGameProcess::ReadArray(uint64 Address, TArray<T>& OutArray, uint64 Length)
-{
-	uint64 ReadSize = 0;
-	static FCriticalSection ProcessHandleCriticalSection;
-	FScopeLock Lock(&ProcessHandleCriticalSection);
-
-	OutArray.SetNum(Length);
-
-	if (ProcessHandle)
-	{
-		uint64 TotalBytesToRead = Length * sizeof(T);
-
-		ReadProcessMemory(ProcessHandle, reinterpret_cast<LPCVOID>(Address), OutArray.GetData(), TotalBytesToRead,
-		                  &ReadSize);
-		assert(ReadSize == TotalBytesToRead);
-	}
-	return ReadSize;
-}
-
+/*
 template <typename TAssetType, typename TCoDType>
 void FGameProcess::ProcessGenericAsset(FXAsset64 AssetNode, const TCHAR* AssetPrefix,
                                        TFunction<void(const TAssetType&, TSharedPtr<TCoDType>)> Customizer)
@@ -226,3 +188,4 @@ void FGameProcess::ProcessGenericAsset(FXAsset64 AssetNode, const TCHAR* AssetPr
 			LoadingProgressAdd();
 		});
 }
+*/

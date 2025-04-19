@@ -1,71 +1,264 @@
 ﻿#include "WraithX/GameProcess.h"
 
+#include "SeLogChannels.h"
 #include "CDN/CoDCDNDownloaderV2.h"
+#include "GameInfo/GameAssetDiscovererFactory.h"
 #include "Structures/MW6GameStructures.h"
-#include "WraithX/CoDAssetDatabase.h"
 #include "WraithX/LocateGameInfo.h"
+#include "WraithX/WindowsMemoryReader.h"
 
 FGameProcess::FGameProcess()
 {
-	ProcessId = GetProcessId();
-	ProcessHandle = OpenTargetProcess();
-	ProcessPath = GetProcessPath();
-
-	LoadingProgressAdd(0.1f);
-
-	AsyncTask(ENamedThreads::GameThread, [this]()
-	{
-		if (LocateGameInfo())
-		{
-			if (ParasyteBaseState.IsValid() && ParasyteBaseState->GameID != 0)
-			{
-				LoadGameFromParasyte();
-			}
-		}
-	});
 }
 
 FGameProcess::~FGameProcess()
 {
-	if (ProcessHandle)
-		CloseHandle(ProcessHandle);
-	ProcessHandle = nullptr;
-	FCoDAssetDatabase::Get().Shutdown();
+	if (DiscoveryTask)
+	{
+		DiscoveryTask->EnsureCompletion();
+		delete DiscoveryTask;
+		DiscoveryTask = nullptr;
+	}
+	UE_LOG(LogITUMemoryReader, Log, TEXT("FGameProcess destroyed."));
 }
 
-bool FGameProcess::IsRunning()
+bool FGameProcess::Initialize()
 {
-	if (ProcessHandle != NULL)
+	if (bIsInitialized) return true;
+	UE_LOG(LogITUMemoryReader, Log, TEXT("Initializing FGameProcess..."));
+	if (!FindTargetProcess())
 	{
-		DWORD Result = WaitForSingleObject(ProcessHandle, 0);
-		if (Result == WAIT_FAILED)
-		{
-			DWORD lastError = GetLastError();
-			UE_LOG(LogTemp, Error, TEXT("Wait failed with error: %ld"), lastError);
-		}
-		return Result == WAIT_TIMEOUT;
+		UE_LOG(LogITUMemoryReader, Error, TEXT("Initialization failed: Target game process not found."));
+		return false;
 	}
+	if (!OpenProcessHandleAndReader())
+	{
+		UE_LOG(LogITUMemoryReader, Error,
+		       TEXT("Initialization failed: Could not open process handle or create memory reader."));
+		return false;
+	}
+	if (!LocateGameInfoViaParasyte())
+	{
+		UE_LOG(LogITUMemoryReader, Warning,
+		       TEXT("Initialization warning: Failed to locate game info via Parasyte. Asset discovery might fail."));
+	}
+	if (!CreateAndInitializeDiscoverer())
+	{
+		UE_LOG(LogITUMemoryReader, Error,
+		       TEXT("Initialization failed: Could not create or initialize a suitable game asset discoverer."));
+		return false;
+	}
+
+	bIsInitialized = true;
+	UE_LOG(LogITUMemoryReader, Log, TEXT("FGameProcess Initialized Successfully for %s (PID: %d)"),
+	       *TargetProcessInfo.ProcessName,
+	       TargetProcessId);
+	return true;
+}
+
+bool FGameProcess::IsGameRunning()
+{
+	if (!TargetProcessId || !MemoryReader || !MemoryReader->IsValid())
+	{
+		return false;
+	}
+	HANDLE hProcessCheck = ::OpenProcess(SYNCHRONIZE, false, TargetProcessId);
+	if (hProcessCheck == NULL)
+	{
+		return false;
+	}
+	DWORD Result = WaitForSingleObject(hProcessCheck, 0);
+	CloseHandle(hProcessCheck);
+	if (Result == WAIT_FAILED)
+	{
+		UE_LOG(LogITUMemoryReader, Warning, TEXT("IsGameRunning: WaitForSingleObject failed. Error: %d"),
+		       GetLastError());
+		return false;
+	}
+	return Result == WAIT_TIMEOUT;
+}
+
+void FGameProcess::StartAssetDiscovery()
+{
+	if (!bIsInitialized)
+	{
+		UE_LOG(LogITUMemoryReader, Error, TEXT("Cannot start asset discovery: FGameProcess not initialized."));
+		return;
+	}
+	if (bIsDiscovering)
+	{
+		UE_LOG(LogITUMemoryReader, Warning, TEXT("Asset discovery already in progress."));
+		return;
+	}
+	if (DiscoveryTask)
+	{
+		UE_LOG(LogITUMemoryReader, Warning, TEXT("Cleaning up previous discovery task before starting anew."));
+		DiscoveryTask->EnsureCompletion();
+		delete DiscoveryTask;
+		DiscoveryTask = nullptr;
+	}
+	{
+		FScopeLock Lock(&LoadedAssetsLock);
+		LoadedAssets.Empty();
+	}
+	{
+		FScopeLock Lock(&ProgressLock);
+		CurrentDiscoveryProgressCount = 0.0f;
+		TotalDiscoveredAssets = 0.0f;
+	}
+	bIsDiscovering = true;
+	UE_LOG(LogITUMemoryReader, Log, TEXT("Starting asynchronous asset discovery..."));
+
+	DiscoveryTask = new FAsyncTask<FAssetDiscoveryTask>(AsShared());
+	DiscoveryTask->StartBackgroundTask();
+}
+
+bool FGameProcess::FindTargetProcess()
+{
+	TargetProcessId = 0;
+	TargetProcessPath = "";
+	bool bFound = false;
+
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (hSnapshot != INVALID_HANDLE_VALUE)
+	{
+		PROCESSENTRY32 pe32;
+		pe32.dwSize = sizeof(PROCESSENTRY32);
+		if (Process32First(hSnapshot, &pe32))
+		{
+			do
+			{
+				FString CurrentProcessName = FString(pe32.szExeFile).ToLower();
+				for (const auto& GameInfo : CoDAssets::GameProcessInfos)
+				{
+					if (CurrentProcessName == FString(*GameInfo.ProcessName).ToLower())
+					{
+						TargetProcessInfo = GameInfo;
+						TargetProcessId = pe32.th32ProcessID;
+						bFound = true;
+
+						if (HANDLE hTempProcess = ::OpenProcess(
+							PROCESS_QUERY_LIMITED_INFORMATION, false, TargetProcessId))
+						{
+							WCHAR path[MAX_PATH];
+							if (GetModuleFileNameEx(hTempProcess, NULL, path, MAX_PATH))
+							{
+								TargetProcessPath = FString(path);
+							}
+							CloseHandle(hTempProcess);
+							break;
+						}
+						UE_LOG(LogITUMemoryReader, Warning, TEXT("Could not open process %d to get path. Error: %d"),
+						       TargetProcessId, GetLastError());
+					}
+				}
+			}
+			while (Process32Next(hSnapshot, &pe32) && !bFound);
+		}
+		CloseHandle(hSnapshot);
+	}
+	if (bFound)
+		UE_LOG(LogITUMemoryReader, Log, TEXT("Found target process: %s (PID: %d) at %s"), *TargetProcessInfo.ProcessName,
+	       TargetProcessId, *TargetProcessPath);
+	return bFound;
+}
+
+bool FGameProcess::OpenProcessHandleAndReader()
+{
+	if (TargetProcessId == 0) return false;
+	// MemoryReader is now responsible for opening/closing the handle
+	MemoryReader = MakeShared<FWindowsMemoryReader>(TargetProcessId);
+	return MemoryReader->IsValid();
+}
+
+bool FGameProcess::LocateGameInfoViaParasyte()
+{
+	if (TargetProcessPath.IsEmpty() || !MemoryReader || !MemoryReader->IsValid()) return false;
+	if (TargetProcessInfo.GameID == CoDAssets::ESupportedGames::Parasyte)
+	{
+		if (LocateGameInfo::Parasyte(TargetProcessPath, ParasyteState))
+		{
+			if (ParasyteState.IsValid())
+			{
+				UE_LOG(LogITUMemoryReader, Log, TEXT("Parasyte info located: GameID=0x%llX, Addr=0x%llX, Dir=%s"),
+				       ParasyteState->GameID, ParasyteState->StringsAddress, *ParasyteState->GameDirectory);
+				return true;
+			}
+			UE_LOG(LogITUMemoryReader, Warning,
+			       TEXT("LocateGameInfo::Parasyte returned true but ParasyteState is null."));
+			return false;
+		}
+	}
+	UE_LOG(LogITUMemoryReader, Log, TEXT("Target process is not %s, But cannot open."),
+	       *TargetProcessInfo.ProcessName);
 	return false;
 }
 
-FString FGameProcess::ReadFString(uint64 Address)
+bool FGameProcess::CreateAndInitializeDiscoverer()
 {
-	TArray<uint8> Data;
-	while (true)
-	{
-		uint8 Tmp = ReadMemory<uint8>(Address);
-		if (!Tmp) break;
-		Data.Add(Tmp);
-		Address += 1;
-	}
-	Data.Add(0);
+	if (!MemoryReader || !MemoryReader->IsValid()) return false;
 
-	return FString(ANSI_TO_TCHAR(reinterpret_cast<const char*>(Data.GetData())));
+	AssetDiscoverer = FGameAssetDiscovererFactory::CreateDiscoverer(TargetProcessInfo, ParasyteState);
+
+	if (!AssetDiscoverer.IsValid())
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to create an Asset Discoverer."));
+		return false;
+	}
+
+	if (!AssetDiscoverer->Initialize(MemoryReader.Get(), TargetProcessInfo, ParasyteState))
+	{
+		UE_LOG(LogTemp, Error, TEXT("Failed to initialize the Asset Discoverer."));
+		AssetDiscoverer.Reset();
+		return false;
+	}
+	UE_LOG(LogITUMemoryReader, Log, TEXT("Asset Discoverer created and initialized successfully."));
+	return true;
 }
 
-FString FGameProcess::LoadStringEntry(uint64 Index)
+void FGameProcess::HandleAssetDiscovered(TSharedPtr<FCoDAsset> DiscoveredAsset)
 {
-	return ReadFString(ParasyteBaseState->StringsAddress + Index);
+	if (DiscoveredAsset.IsValid())
+	{
+		FScopeLock Lock(&LoadedAssetsLock);
+		LoadedAssets.Add(MoveTemp(DiscoveredAsset));
+	}
+	if (TotalDiscoveredAssets != 0)
+	{
+		FScopeLock Lock(&ProgressLock);
+		CurrentDiscoveryProgressCount = LoadedAssets.Num() / TotalDiscoveredAssets;
+	}
+
+	if (CurrentDiscoveryProgressCount > 0)
+	{
+		AsyncTask(ENamedThreads::GameThread, [this, Progress = CurrentDiscoveryProgressCount]()
+		{
+			OnAssetLoadingProgress.Broadcast(Progress);
+		});
+	}
+
+	if (LoadedAssets.Num() == TotalDiscoveredAssets)
+	{
+		AsyncTask(ENamedThreads::GameThread, [this]()
+		{
+			HandleDiscoveryComplete();
+		});
+	}
+}
+
+void FGameProcess::HandleDiscoveryComplete()
+{
+	UE_LOG(LogTemp, Log, TEXT("Asset Discovery Complete. Total Assets Found: %d"), LoadedAssets.Num());
+	bIsDiscovering = false;
+
+	OnAssetLoadingProgress.Broadcast(1.0f);
+
+	OnAssetLoadingComplete.Broadcast();
+
+	if (DiscoveryTask)
+	{
+		// DiscoveryTask = nullptr;
+	}
 }
 
 bool FGameProcess::LocateGameInfo()
@@ -80,68 +273,29 @@ bool FGameProcess::LocateGameInfo()
 	return false;
 }
 
-void FGameProcess::LoadGameFromParasyte()
+CoDAssets::ESupportedGames FGameProcess::GetCurrentGameType() const
 {
-	if (!IsRunning())
-	{
-		return;
-	}
-	switch (ParasyteBaseState->GameID)
-	{
-	// Modern Warfare 3 (2023)
-	case 0x4B4F4D41594D4159:
-		GameType = CoDAssets::ESupportedGames::ModernWarfare6;
-		GameFlag = ParasyteBaseState->Flags.Contains("sp")
-			           ? CoDAssets::ESupportedGameFlags::SP
-			           : CoDAssets::ESupportedGameFlags::MP;
-		XSubDecrypt = MakeShared<FXSub>(ParasyteBaseState->GameID, ParasyteBaseState->GameDirectory);
-		CDNDownloader = MakeUnique<FCoDCDNDownloaderV2>();
-		LoadAssets();
-		break;
-	}
-	if (CDNDownloader) CDNDownloader->Initialize(ParasyteBaseState->GameDirectory);
+	return AssetDiscoverer.IsValid() ? AssetDiscoverer->GetGameType() : CoDAssets::ESupportedGames::None;
 }
 
-FXAsset64 FGameProcess::RequestAsset(const uint64& AssetPtr)
+CoDAssets::ESupportedGameFlags FGameProcess::GetCurrentGameFlag() const
 {
-	return ReadMemory<FXAsset64>(AssetPtr);
+	return AssetDiscoverer.IsValid() ? AssetDiscoverer->GetGameFlags() : CoDAssets::ESupportedGameFlags::None;
 }
 
-FString FGameProcess::ProcessAssetName(FString Name)
+FCoDCDNDownloader* FGameProcess::GetCDNDownloader()
 {
-	Name = Name.Replace(TEXT("::"), TEXT("_")).TrimStartAndEnd();
-
-	if (int32 Index; Name.FindLastChar(TEXT('/'), Index))
-	{
-		Name = Name.RightChop(Index + 1);
-	}
-
-	if (int32 Index; Name.FindLastChar(TEXT(':'), Index) &&
-		Index > 0 && Name[Index - 1] == ':')
-	{
-		Name = Name.RightChop(Index + 1);
-	}
-
-	return Name;
+	return AssetDiscoverer.IsValid() ? AssetDiscoverer->GetCDNDownloader() : nullptr;
 }
 
-void FGameProcess::ProcessAssetPool(int32 PoolOffset, TFunction<void(FXAsset64)> AssetProcessor)
+TSharedPtr<FXSub> FGameProcess::GetDecrypt()
 {
-	const auto Pool = ReadMemory<FXAssetPool64>(ParasyteBaseState->PoolsAddress + sizeof(FXAssetPool64) * PoolOffset);
-
-	for (auto AssetNode = RequestAsset(Pool.Root); ; AssetNode = RequestAsset(AssetNode.Next))
-	{
-		if (AssetNode.Header)
-		{
-			AssetProcessor(AssetNode);
-		}
-		if (!AssetNode.Next) break;
-	}
+	return AssetDiscoverer.IsValid() ? AssetDiscoverer->GetDecryptor() : nullptr;
 }
 
 void FGameProcess::ProcessModelAsset(FXAsset64 AssetNode)
 {
-	FMW6XModel Model = ReadMemory<FMW6XModel>(AssetNode.Header);
+	/*FMW6XModel Model = ReadMemory<FMW6XModel>(AssetNode.Header);
 	Model.Hash &= 0xFFFFFFFFFFFFFFF;
 
 	auto CreateModel = [&](const FString& ModelName)
@@ -171,160 +325,67 @@ void FGameProcess::ProcessModelAsset(FXAsset64 AssetNode)
 				            ? FString::Printf(TEXT("xmodel_%llx"), Model.Hash)
 				            : QueryName);
 		});
-	}
+	}*/
 }
 
 void FGameProcess::ProcessImageAsset(FXAsset64 AssetNode)
 {
-	ProcessGenericAsset<FMW6GfxImage, FCoDImage>(AssetNode, TEXT("ximage"),
-	                                             [](auto& Image, auto LoadedImage)
-	                                             {
-		                                             LoadedImage->AssetType = EWraithAssetType::Image;
-		                                             LoadedImage->Width = Image.Width;
-		                                             LoadedImage->Height = Image.Height;
-		                                             LoadedImage->Format = Image.ImageFormat;
-		                                             LoadedImage->Streamed = Image.LoadedImagePtr == 0;
-	                                             });
+	// ProcessGenericAsset<FMW6GfxImage, FCoDImage>(AssetNode, TEXT("ximage"),
+	//                                              [](auto& Image, auto LoadedImage)
+	//                                              {
+	// 	                                             LoadedImage->AssetType = EWraithAssetType::Image;
+	// 	                                             LoadedImage->Width = Image.Width;
+	// 	                                             LoadedImage->Height = Image.Height;
+	// 	                                             LoadedImage->Format = Image.ImageFormat;
+	// 	                                             LoadedImage->Streamed = Image.LoadedImagePtr == 0;
+	//                                              });
 }
 
 void FGameProcess::ProcessAnimAsset(FXAsset64 AssetNode)
 {
-	ProcessGenericAsset<FMW6XAnim, FCoDAnim>(AssetNode, TEXT("xanim"),
-	                                         [](auto& Anim, auto LoadedAnim)
-	                                         {
-		                                         LoadedAnim->AssetType = EWraithAssetType::Animation;
-		                                         LoadedAnim->Framerate = Anim.Framerate;
-		                                         LoadedAnim->FrameCount = Anim.FrameCount;
-		                                         LoadedAnim->BoneCount = Anim.TotalBoneCount;
-	                                         });
+	// ProcessGenericAsset<FMW6XAnim, FCoDAnim>(AssetNode, TEXT("xanim"),
+	//                                          [](auto& Anim, auto LoadedAnim)
+	//                                          {
+	// 	                                         LoadedAnim->AssetType = EWraithAssetType::Animation;
+	// 	                                         LoadedAnim->Framerate = Anim.Framerate;
+	// 	                                         LoadedAnim->FrameCount = Anim.FrameCount;
+	// 	                                         LoadedAnim->BoneCount = Anim.TotalBoneCount;
+	//                                          });
 }
 
 void FGameProcess::ProcessMaterialAsset(FXAsset64 AssetNode)
 {
-	ProcessGenericAsset<FMW6Material, FCoDMaterial>(AssetNode, TEXT("xmaterial"),
-	                                                [](auto& Material, auto LoadedMaterial)
-	                                                {
-		                                                LoadedMaterial->AssetType = EWraithAssetType::Material;
-		                                                LoadedMaterial->ImageCount = Material.ImageCount;
-	                                                });
+	// ProcessGenericAsset<FMW6Material, FCoDMaterial>(AssetNode, TEXT("xmaterial"),
+	//                                                 [](auto& Material, auto LoadedMaterial)
+	//                                                 {
+	// 	                                                LoadedMaterial->AssetType = EWraithAssetType::Material;
+	// 	                                                LoadedMaterial->ImageCount = Material.ImageCount;
+	//                                                 });
 }
 
 void FGameProcess::ProcessSoundAsset(FXAsset64 AssetNode)
 {
-	ProcessGenericAsset<FMW6SoundAsset, FCoDSound>(AssetNode, TEXT("xmaterial"),
-	                                               [](auto& SoundAsset, auto LoadedSound)
-	                                               {
-		                                               LoadedSound->FullName = LoadedSound->AssetName;
-		                                               LoadedSound->AssetType = EWraithAssetType::Sound;
-		                                               LoadedSound->AssetName = FPaths::GetBaseFilename(
-			                                               LoadedSound->AssetName);
-		                                               int32 DotIndex = LoadedSound->AssetName.Find(TEXT("."));
-		                                               if (DotIndex != INDEX_NONE)
-		                                               {
-			                                               LoadedSound->AssetName = LoadedSound->AssetName.Left(
-				                                               DotIndex);
-		                                               }
-		                                               LoadedSound->FullPath = FPaths::GetPath(LoadedSound->AssetName);
-
-		                                               LoadedSound->FrameRate = SoundAsset.FrameRate;
-		                                               LoadedSound->FrameCount = SoundAsset.FrameCount;
-		                                               LoadedSound->ChannelsCount = SoundAsset.ChannelCount;
-		                                               LoadedSound->AssetSize = -1;
-		                                               LoadedSound->bIsFileEntry = false;
-		                                               LoadedSound->Length = 1000.0f * (LoadedSound->FrameCount /
-			                                               static_cast<float>(LoadedSound->FrameRate));
-	                                               });
-}
-
-void FGameProcess::AddAssetToCollection(TSharedPtr<FCoDAsset> Asset)
-{
-	if (&LoadedAssetsLock)
-	{
-		FScopeLock Lock(&LoadedAssetsLock);
-		LoadedAssets.Add(MoveTemp(Asset));
-	}
-}
-
-void FGameProcess::LoadingProgressAdd(float InAddProgress)
-{
-	FScopeLock Lock(&ProgressLock);
-
-	CurrentLoadingProgress += InAddProgress;
-	if (CurrentLoadingProgress > 0.01f)
-	{
-		float ProgressToSend = CurrentLoadingProgress;
-		CurrentLoadingProgress = 0;
-		AsyncTask(ENamedThreads::GameThread, [ProgressToSend, this]
-		{
-			if (this)
-			{
-				OnOnAssetLoadingDelegate.Broadcast(ProgressToSend);
-			}
-		});
-	}
-}
-
-void FGameProcess::LoadAssets()
-{
-	struct FAssetPoolInfo
-	{
-		int32 Offset;
-		TFunction<void(FXAsset64)> Processor;
-	};
-
-	TArray<FAssetPoolInfo> AssetPools = {
-		{9, [this](FXAsset64 AssetNode) { ProcessModelAsset(AssetNode); }},
-		{21, [this](FXAsset64 AssetNode) { ProcessImageAsset(AssetNode); }},
-		{7, [this](FXAsset64 AssetNode) { ProcessAnimAsset(AssetNode); }},
-		{11, [this](FXAsset64 AssetNode) { ProcessMaterialAsset(AssetNode); }},
-		{0xc1, [this](FXAsset64 AssetNode) { ProcessSoundAsset(AssetNode); }}
-	};
-
-	for (int32 PoolIdx = 0; PoolIdx < AssetPools.Num(); ++PoolIdx)
-	{
-		const auto& [Offset, Processor] = AssetPools[PoolIdx];
-		ProcessAssetPool(Offset, Processor);
-	}
-}
-
-DWORD FGameProcess::GetProcessId()
-{
-	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
-	if (hSnapshot != INVALID_HANDLE_VALUE)
-	{
-		PROCESSENTRY32 pe32;
-		pe32.dwSize = sizeof(PROCESSENTRY32);
-		if (Process32First(hSnapshot, &pe32))
-		{
-			do
-			{
-				for (const auto& GameProcessInfo : CoDAssets::GameProcessInfos)
-				{
-					if (std::wstring ProcessName = *GameProcessInfo.ProcessName; ProcessName == pe32.szExeFile)
-					{
-						ProcessInfo = GameProcessInfo;
-						return pe32.th32ProcessID;
-					}
-				}
-			}
-			while (Process32Next(hSnapshot, &pe32));
-		}
-		CloseHandle(hSnapshot);
-	}
-	return 0;
-}
-
-FString FGameProcess::GetProcessPath()
-{
-	wchar_t path[MAX_PATH];
-	if (GetModuleFileNameEx(ProcessHandle, NULL, path, MAX_PATH))
-	{
-		return FString(path);
-	}
-	return "";
-}
-
-void* FGameProcess::OpenTargetProcess()
-{
-	return OpenProcess(PROCESS_ALL_ACCESS, false, ProcessId);
+	// ProcessGenericAsset<FMW6SoundAsset, FCoDSound>(AssetNode, TEXT("xmaterial"),
+	//                                                [](auto& SoundAsset, auto LoadedSound)
+	//                                                {
+	// 	                                               LoadedSound->FullName = LoadedSound->AssetName;
+	// 	                                               LoadedSound->AssetType = EWraithAssetType::Sound;
+	// 	                                               LoadedSound->AssetName = FPaths::GetBaseFilename(
+	// 		                                               LoadedSound->AssetName);
+	// 	                                               int32 DotIndex = LoadedSound->AssetName.Find(TEXT("."));
+	// 	                                               if (DotIndex != INDEX_NONE)
+	// 	                                               {
+	// 		                                               LoadedSound->AssetName = LoadedSound->AssetName.Left(
+	// 			                                               DotIndex);
+	// 	                                               }
+	// 	                                               LoadedSound->FullPath = FPaths::GetPath(LoadedSound->AssetName);
+	//
+	// 	                                               LoadedSound->FrameRate = SoundAsset.FrameRate;
+	// 	                                               LoadedSound->FrameCount = SoundAsset.FrameCount;
+	// 	                                               LoadedSound->ChannelsCount = SoundAsset.ChannelCount;
+	// 	                                               LoadedSound->AssetSize = -1;
+	// 	                                               LoadedSound->bIsFileEntry = false;
+	// 	                                               LoadedSound->Length = 1000.0f * (LoadedSound->FrameCount /
+	// 		                                               static_cast<float>(LoadedSound->FrameRate));
+	//                                                });
 }
