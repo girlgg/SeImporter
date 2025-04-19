@@ -29,7 +29,6 @@ void FAssetImportManager::InitializeGame()
 	ProcessInstance->StartAssetDiscovery();
 	ProcessInstance->OnAssetLoadingProgress.AddRaw(this, &FAssetImportManager::OnAssetLoadingInternal);
 	ProcessInstance->OnAssetLoadingComplete.AddRaw(this, &FAssetImportManager::OnAssetInitCompletedInternal);
-	// FCoDAssetDatabase::Get().GetTaskCompletedHandle().AddRaw(this, &FAssetImportManager::OnAssetInitCompletedInternal);
 	UpdateGameHandler();
 	UE_LOG(LogTemp, Log, TEXT("Game Initialized. Handler created."));
 }
@@ -65,7 +64,7 @@ TArray<TSharedPtr<FCoDAsset>> FAssetImportManager::GetLoadedAssets() const
 	return TArray<TSharedPtr<FCoDAsset>>();
 }
 
-void FAssetImportManager::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>> Selection)
+void FAssetImportManager::ImportSelection(FString ImportPath, TArray<TSharedPtr<FCoDAsset>> Selection, FString OptionalParams)
 {
 }
 

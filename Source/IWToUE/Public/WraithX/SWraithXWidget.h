@@ -1,8 +1,10 @@
 ﻿#pragma once
 #include "CoDAssetType.h"
 #include "WraithX.h"
+#include "WraithXViewModel.h"
 #include "AssetImporter/AssetImportManager.h"
 
+class FWraithXViewModel;
 class SProgressBar;
 
 class SWraithXPreviewWindow final : public SWindow
@@ -160,6 +162,30 @@ private:
 	void SortData();
 
 private:
+	// --- UI Construction Helpers ---
+	
+	TSharedRef<SWidget> CreateTopToolbar();
+	TSharedRef<SWidget> CreateMainArea();
+	TSharedRef<SWidget> CreateBottomPanel();
+	TSharedRef<SWidget> CreateStatusBar();
+
+	// --- Slate Event Handlers (mostly delegate to ViewModel) ---
+
+	void HandleSearchTextChanged(const FText& NewText);
+	void HandleSearchTextCommitted(const FText& NewText, ETextCommit::Type CommitType);
+	FReply HandleClearSearchClicked();
+	FReply HandleLoadGameClicked();
+	FReply HandleRefreshGameClicked();
+	FReply HandleImportSelectedClicked();
+	FReply HandleImportAllClicked();
+	FReply HandleSettingsClicked();
+	FReply HandleBrowseImportPathClicked();
+	void HandleImportPathCommitted(const FText& InText, ETextCommit::Type CommitType);
+	void HandleListSelectionChanged(TSharedPtr<FCoDAsset> Item, ESelectInfo::Type SelectInfo);
+	void HandleListDoubleClick(TSharedPtr<FCoDAsset> Item);
+
+	bool IsUIEnabled() const;
+	
 	// 数据源
 	TArray<TSharedPtr<FCoDAsset>> FilteredItems{};
 
@@ -182,8 +208,13 @@ private:
 	int32 TotalAssetCount = 0;
 	FCriticalSection DataLock;
 
+	TSharedPtr<FWraithXViewModel> ViewModel = MakeShared<FWraithXViewModel>();
+	TSharedPtr<FAssetImportManager> AssetImportManager = MakeShared<FAssetImportManager>();
 	TUniquePtr<FWraithX> WraithX = MakeUnique<FWraithX>();
-	TUniquePtr<FAssetImportManager> AssetImportManager = MakeUnique<FAssetImportManager>();
+
+	// --- UI Element References ---
+	
+	TSharedPtr<SAssetInfoPanel> AssetInfoPanel;
 
 	float CurrentLoadingProgress = 0.f;
 	bool bIsLoading = false;
